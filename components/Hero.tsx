@@ -3,9 +3,10 @@ import Image from "next/image";
 
 interface HeroProps {
   onCreate: () => void;
+  disabled?: boolean;
 }
 
-export function Hero({ onCreate }: HeroProps) {
+export function Hero({ onCreate, disabled = false }: HeroProps) {
   return (
     <section className="relative overflow-hidden py-5">
       <Image
@@ -27,7 +28,8 @@ export function Hero({ onCreate }: HeroProps) {
           <button
             type="button"
             onClick={onCreate}
-            className="inline-flex items-center gap-2 rounded-lg bg-ritual-green px-5 py-3 font-medium text-white shadow-soft transition hover:bg-ritual-green/90"
+            disabled={disabled}
+            className="inline-flex items-center gap-2 rounded-lg bg-ritual-green px-5 py-3 font-medium text-white shadow-soft transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
           >
             Create My Agent
             <ArrowRight size={18} aria-hidden="true" />

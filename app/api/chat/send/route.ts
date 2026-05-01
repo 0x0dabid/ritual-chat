@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { type Address } from "viem";
+import { isAddress, type Address } from "viem";
 import { RITUAL_LLM_PRECOMPILE_ADDRESS } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkSmartAccountRateLimit } from "@/lib/rateLimit";
 import { buildLlmCallData, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
@@ -20,6 +20,7 @@ export async function POST(request: Request) {
 
     if (!session) throw new Error("Create your Persistent Ritual Agent before chatting.");
     if (session.status !== "active") throw new Error("Agent creation failed. Please try again.");
+    if (!isAddress(session.userWallet)) throw new Error("Connect your wallet before chatting.");
     validateSessionKey(session);
     await checkSmartAccountRateLimit(ip, session.smartAccountAddress, "chat:aa");
     await checkRelayerBalance();

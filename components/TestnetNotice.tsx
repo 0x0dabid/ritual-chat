@@ -8,7 +8,7 @@ export function TestnetNotice({ mockMode }: TestnetNoticeProps) {
       This is a testnet application. No real value is involved.
       {mockMode ? (
         <span className="ml-2 font-medium text-ritual-green">
-          Mock mode is enabled for local UI testing.
+          Mock mode: addresses and tx hashes are simulated.
         </span>
       ) : null}
     </div>

@@ -14,16 +14,20 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => ({}));
     const requestedSessionId = typeof body.sessionId === "string" ? body.sessionId : null;
-    const requestedWallet = typeof body.userWallet === "string" ? body.userWallet : null;
-    const userWallet = requestedWallet && isAddress(requestedWallet)
-      ? requestedWallet
-      : `public-test-session:${requestedSessionId ?? crypto.randomUUID()}`;
+    const walletAddress = typeof body.walletAddress === "string" ? body.walletAddress : null;
+    if (!walletAddress) throw new Error("Missing walletAddress.");
+    if (!isAddress(walletAddress)) throw new Error("Invalid EVM wallet address.");
 
-    await checkWalletRateLimit(ip, userWallet, "agent:wallet");
+    if (!MOCK_MODE) {
+      throw new Error("Real AA provider is not configured yet.");
+    }
 
-    const existing = requestedSessionId
-      ? await getSession(requestedSessionId)
-      : await getSessionByWallet(userWallet);
+    await checkWalletRateLimit(ip, walletAddress, "agent:wallet");
+
+    const walletSession = await getSessionByWallet(walletAddress);
+    const requestedSession = requestedSessionId ? await getSession(requestedSessionId) : null;
+    const existing = walletSession
+      ?? (requestedSession?.userWallet.toLowerCase() === walletAddress.toLowerCase() ? requestedSession : null);
     const sessionId = existing?.id ?? requestedSessionId ?? crypto.randomUUID();
 
     if (existing?.status === "active") {
@@ -35,7 +39,7 @@ export async function POST(request: Request) {
 
     const smartAccountAddress = await createOrLoadSmartAccount({
       sessionId,
-      userWallet,
+      userWallet: walletAddress,
       existing,
     }) as Address;
     const persistentAgentAddress = await createOrLoadPersistentAgent({
@@ -48,7 +52,7 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const session: AgentSession = {
       id: sessionId,
-      userWallet,
+      userWallet: walletAddress,
       smartAccountAddress,
       persistentAgentAddress,
       sessionKeyAddress: sessionKey.sessionKeyAddress,

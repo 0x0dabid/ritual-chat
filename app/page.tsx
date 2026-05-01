@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { AgentSetupCard } from "@/components/AgentSetupCard";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { ChatWindow } from "@/components/ChatWindow";
@@ -11,30 +12,22 @@ import { TestnetNotice } from "@/components/TestnetNotice";
 import type { AgentSession, ChatMessage } from "@/lib/types";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
-const WALLET_STORAGE_KEY = "ritual-chat-wallet";
-
-declare global {
-  interface Window {
-    ethereum?: {
-      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-    };
-  }
-}
 
 export default function Home() {
+  const { address, isConnected } = useAccount();
+  const { connectAsync, connectors, isPending: walletPending } = useConnect();
+  const { disconnect } = useDisconnect();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [agent, setAgent] = useState<AgentSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const mockMode = useMemo(() => agent?.mockMode ?? false, [agent]);
+  const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE !== "false", [agent]);
+  const walletAddress = isConnected && address ? address : null;
 
   useEffect(() => {
     const stored = window.localStorage.getItem(SESSION_STORAGE_KEY);
-    const storedWallet = window.localStorage.getItem(WALLET_STORAGE_KEY);
-    if (storedWallet) setWalletAddress(storedWallet);
     if (!stored) return;
 
     setSessionId(stored);
@@ -50,25 +43,49 @@ export default function Home() {
       });
   }, []);
 
-  async function connectWallet() {
-    setError(null);
-    if (!window.ethereum) {
-      setError("No browser wallet found. You can start a public test session instead.");
+  useEffect(() => {
+    if (!walletAddress) {
+      setAgent(null);
+      setMessages([]);
       return;
     }
 
+    fetch(`/api/agent/status?walletAddress=${encodeURIComponent(walletAddress)}`)
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (!data?.session) {
+          setAgent(null);
+          setMessages([]);
+          return;
+        }
+
+        window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.id);
+        setSessionId(data.session.id);
+        setAgent(data.session);
+        setMessages(data.messages ?? []);
+      })
+      .catch(() => {
+        setError("Something went wrong while loading your Ritual agent. Please try again.");
+      });
+  }, [walletAddress]);
+
+  async function connectWallet() {
+    setError(null);
     try {
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      const first = Array.isArray(accounts) && typeof accounts[0] === "string" ? accounts[0] : null;
-      if (!first) throw new Error("Wallet connection failed. Please try again.");
-      setWalletAddress(first);
-      window.localStorage.setItem(WALLET_STORAGE_KEY, first);
+      const injected = connectors[0];
+      if (!injected) throw new Error("No injected wallet found. Please install MetaMask.");
+      await connectAsync({ connector: injected });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Wallet connection failed. Please try again.");
     }
   }
 
-  async function createAgent(usePublicSession = false) {
+  async function createAgent() {
+    if (!walletAddress) {
+      setError("Connect your wallet first to create your Ritual Smart Account.");
+      return;
+    }
+
     setError(null);
     setLoadingStep("Creating Ritual Smart Account...");
     try {
@@ -77,7 +94,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
-          userWallet: usePublicSession ? null : walletAddress,
+          walletAddress,
         }),
       });
 
@@ -146,7 +163,7 @@ export default function Home() {
     <main className="min-h-screen bg-ritual-page text-ritual-text">
       <Header />
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <Hero onCreate={createAgent} />
+        <Hero onCreate={createAgent} disabled={!walletAddress || Boolean(agent)} />
         <TestnetNotice mockMode={mockMode} />
         {error ? (
           <div className="rounded-lg border border-red-700/30 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -159,9 +176,10 @@ export default function Home() {
               active={Boolean(agent)}
               loadingStep={loadingStep}
               walletAddress={walletAddress}
+              walletPending={walletPending}
               onConnectWallet={connectWallet}
-              onCreate={() => createAgent(false)}
-              onPublicSession={() => createAgent(true)}
+              onDisconnectWallet={() => disconnect()}
+              onCreate={createAgent}
             />
             {agent ? <AgentStatusCard session={agent} /> : null}
           </div>

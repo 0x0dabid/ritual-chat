@@ -27,11 +27,12 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
         </span>
       </div>
       <div className="mt-4">
-        <Row label="Agent Type" value="Persistent Agent" />
-        <Row label="Network" value="Ritual Testnet" />
-        <Row label="Owner" value="User AA Smart Account" />
+        <Row label="Connected Wallet" value={<span title={session.userWallet}>{compact(session.userWallet)}</span>} />
         <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)}</span>} />
         <Row label="Persistent Agent" value={<span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>} />
+        <Row label="Agent Type" value="Persistent Agent" />
+        <Row label="Owner" value="User AA Smart Account" />
+        <Row label="Network" value="Ritual Testnet" />
         <Row label="Session" value="Active" />
         <Row label="Gas" value="Sponsored / Relayed on Testnet" />
         <Row

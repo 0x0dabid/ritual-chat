@@ -81,6 +81,15 @@ Open `http://localhost:3000`.
 
 Mock mode is not real on-chain execution. Production mode must not use fake tx hashes.
 
+## Current Integration Status
+
+- Mock mode works.
+- Wallet connection is now used as the user identity layer.
+- Real AA smart account deployment is still adapter-gated.
+- Real `PersistentAgentFactory` integration is next.
+- Real Ritual LLM transaction flow comes after AA provider/factory selection.
+- The relayer does not own user agents.
+
 ## Real Ritual Mode
 
 Set `MOCK_MODE=false`, configure `RITUAL_RPC_URL`, and set a server-only `RELAYER_PRIVATE_KEY`.
