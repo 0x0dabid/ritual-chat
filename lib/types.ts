@@ -13,6 +13,7 @@ export interface AgentSession {
   persistentAgentStatus?: IntegrationStatus;
   persistentAgentCreateTxHash?: string;
   persistentAgentStatusMessage?: string;
+  persistentAgentProviderLabel?: string;
   persistentAgentMissingConfig?: string[];
   sessionKeyAddress: string;
   sessionKeyStatus?: IntegrationStatus;

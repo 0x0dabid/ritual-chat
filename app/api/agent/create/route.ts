@@ -101,6 +101,7 @@ export async function POST(request: Request) {
       persistentAgentStatus: persistentAgentResult.persistentAgentStatus,
       persistentAgentCreateTxHash: persistentAgentResult.persistentAgentCreateTxHash,
       persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
+      persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
       persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
       sessionKeyAddress: sessionKey.sessionKeyAddress,
       sessionKeyStatus: MOCK_MODE ? "active" : "pending",

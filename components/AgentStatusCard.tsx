@@ -48,6 +48,9 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
                 : "Pending Ritual integration"}
         />
         <Row label="Persistent Agent Status" value={persistentAgentStatus[0].toUpperCase() + persistentAgentStatus.slice(1)} />
+        {session.persistentAgentProviderLabel ? (
+          <Row label="LLM Provider" value={session.persistentAgentProviderLabel} />
+        ) : null}
         {session.persistentAgentCreateTxHash ? (
           <Row
             label="Persistent Agent Create TX"

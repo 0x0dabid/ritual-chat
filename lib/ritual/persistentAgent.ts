@@ -47,6 +47,14 @@ const LLM_PROVIDER = {
   openrouter: 4,
 } as const;
 
+const LLM_PROVIDER_LABELS = {
+  0: "Anthropic",
+  1: "OpenAI",
+  2: "Gemini",
+  3: "xAI",
+  4: "OpenRouter / DeepSeek-compatible",
+} as const;
+
 export const persistentAgentFactoryAbi = parseAbi([
   "function predictLauncher(address owner, bytes32 userSalt) view returns (address launcher, bytes32 childSalt)",
   "function predictCompressedLauncher(address owner, bytes32 userSalt) view returns (address launcher, bytes32 compressedSalt, bytes32 childSalt)",
@@ -64,6 +72,7 @@ export interface PersistentAgentResult {
   persistentAgentStatus: IntegrationStatus;
   persistentAgentCreateTxHash?: Hex;
   persistentAgentStatusMessage?: string;
+  persistentAgentProviderLabel?: string;
   persistentAgentMissingConfig?: string[];
   createCall?: {
     target: Address;
@@ -79,12 +88,12 @@ export function isPersistentAgentConfigured() {
 
 export function getPersistentAgentMissingConfig(env: NodeJS.ProcessEnv = process.env) {
   const missing: string[] = [];
-  const provider = env.PERSISTENT_AGENT_LLM_PROVIDER?.toLowerCase();
+  const provider = normalizeProvider(env.PERSISTENT_AGENT_LLM_PROVIDER);
 
   if (!env.RITUAL_RPC_URL) missing.push("RITUAL_RPC_URL");
   if (!env.PERSISTENT_AGENT_FACTORY_ADDRESS) missing.push("PERSISTENT_AGENT_FACTORY_ADDRESS");
   if (!env.PERSISTENT_AGENT_EXECUTOR_ADDRESS) missing.push("PERSISTENT_AGENT_EXECUTOR_ADDRESS");
-  if (!provider || !(provider in LLM_PROVIDER)) missing.push("PERSISTENT_AGENT_LLM_PROVIDER");
+  if (provider === null) missing.push("PERSISTENT_AGENT_LLM_PROVIDER");
   if (!env.PERSISTENT_AGENT_MODEL) missing.push("PERSISTENT_AGENT_MODEL");
   if (!env.PERSISTENT_AGENT_LLM_API_KEY_REF) missing.push("PERSISTENT_AGENT_LLM_API_KEY_REF");
   if (!env.PERSISTENT_AGENT_DA_PROVIDER) missing.push("PERSISTENT_AGENT_DA_PROVIDER");
@@ -96,6 +105,11 @@ export function getPersistentAgentMissingConfig(env: NodeJS.ProcessEnv = process
   if (!env.PERSISTENT_AGENT_SCHEDULER_LOCK_DURATION) missing.push("PERSISTENT_AGENT_SCHEDULER_LOCK_DURATION");
 
   return missing;
+}
+
+export function getPersistentAgentProviderLabel(provider = PERSISTENT_AGENT_LLM_PROVIDER) {
+  const providerEnum = normalizeProvider(provider);
+  return providerEnum === null ? undefined : LLM_PROVIDER_LABELS[providerEnum];
 }
 
 export async function createOrLoadPersistentAgent(params: {
@@ -122,6 +136,7 @@ export async function createOrLoadRealPersistentAgent(params: {
       persistentAgentStatus: "active",
       persistentAgentCreateTxHash: params.existing.persistentAgentCreateTxHash as Hex | undefined,
       persistentAgentStatusMessage: "Persistent Agent already active.",
+      persistentAgentProviderLabel: getPersistentAgentProviderLabel(),
     };
   }
 
@@ -140,6 +155,7 @@ export async function createOrLoadRealPersistentAgent(params: {
       persistentAgentAddress: launcher,
       persistentAgentStatus: "active",
       persistentAgentStatusMessage: "Persistent Agent launcher is deployed on Ritual Testnet.",
+      persistentAgentProviderLabel: getPersistentAgentProviderLabel(),
     };
   }
 
@@ -150,6 +166,7 @@ export async function createOrLoadRealPersistentAgent(params: {
       persistentAgentStatus: "pending",
       persistentAgentMissingConfig: missingConfig,
       persistentAgentStatusMessage: "Persistent Agent config is incomplete. Add the required Ritual env vars to enable real agent creation.",
+      persistentAgentProviderLabel: getPersistentAgentProviderLabel(),
     };
   }
 
@@ -163,6 +180,7 @@ export async function createOrLoadRealPersistentAgent(params: {
     persistentAgentStatus: "pending",
     persistentAgentMissingConfig: ["OWNER_AUTHORIZED_SMART_ACCOUNT_EXECUTION"],
     persistentAgentStatusMessage: "Persistent Agent config is ready, but owner-authorized smart account execution is not wired yet.",
+    persistentAgentProviderLabel: getPersistentAgentProviderLabel(),
     createCall,
   };
 }
@@ -328,11 +346,24 @@ function sessionSalt(sessionId: string): Hex {
 }
 
 function providerToEnum(provider: string | undefined) {
-  const normalized = provider?.toLowerCase();
-  if (!normalized || !(normalized in LLM_PROVIDER)) {
+  const normalized = normalizeProvider(provider);
+  if (normalized === null) {
     throw new Error("Persistent Agent config is incomplete. Set PERSISTENT_AGENT_LLM_PROVIDER.");
   }
-  return LLM_PROVIDER[normalized as keyof typeof LLM_PROVIDER];
+  return normalized;
+}
+
+function normalizeProvider(provider: string | undefined) {
+  const normalized = provider?.toLowerCase();
+  if (!normalized) return null;
+  if (normalized in LLM_PROVIDER) return LLM_PROVIDER[normalized as keyof typeof LLM_PROVIDER];
+
+  const numeric = Number(normalized);
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric <= 4) {
+    return numeric as 0 | 1 | 2 | 3 | 4;
+  }
+
+  return null;
 }
 
 function requiredString(value: string | undefined, name: string) {

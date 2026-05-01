@@ -47,6 +47,7 @@ export async function buildRealSession(params: {
     persistentAgentStatus: persistentAgentResult.persistentAgentStatus,
     persistentAgentCreateTxHash: persistentAgentResult.persistentAgentCreateTxHash,
     persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
+    persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
     persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
     sessionKeyAddress: ZERO_ADDRESS,
     sessionKeyStatus: "pending",

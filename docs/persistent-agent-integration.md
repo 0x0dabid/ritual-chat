@@ -58,7 +58,7 @@ These values are server-side deployment configuration. Do not prefix any secret 
 | Env var | What it means | Example format only | Where to get it | Public or secret | Required for agent creation | Safe in Vercel |
 |---|---|---|---|---|---|---|
 | `PERSISTENT_AGENT_EXECUTOR_ADDRESS` | TEE executor address used by the Persistent Agent and DKMS/secrets flow. | `0x...` selected executor address | Query `TEEServiceRegistry.getServicesByCapability(0, true)` and use `node.teeAddress`, or use a Ritual team-provided live executor for testing. | Public address | Yes | Yes, server env is fine |
-| `PERSISTENT_AGENT_LLM_PROVIDER` | Provider enum name passed to the Persistent Agent payload. Supported Persistent Agent values are `anthropic`, `openai`, `gemini`, `xai`, `openrouter`. | `anthropic` | Choose based on the LLM credential included in encrypted secrets. The `ritual` provider is not available for Persistent Agent in the current skills docs. | Public config | Yes | Yes |
+| `PERSISTENT_AGENT_LLM_PROVIDER` | Provider enum passed to the Persistent Agent payload. Supported Persistent Agent values are `0`/`anthropic`, `1`/`openai`, `2`/`gemini`, `3`/`xai`, `4`/`openrouter`. | `4` for OpenRouter | Choose based on the LLM credential included in encrypted secrets. The `ritual` provider is not available for Persistent Agent in the current skills docs. | Public config | Yes | Yes |
 | `PERSISTENT_AGENT_MODEL` | Exact provider-routable model id. There is no safe default for production. | `provider-model-id` | Provider documentation/account dashboard, then verify with a direct provider API call before encrypting credentials. | Public config | Yes | Yes |
 | `PERSISTENT_AGENT_LLM_API_KEY_REF` | Key name the executor uses to find the LLM API key inside `PERSISTENT_AGENT_ENCRYPTED_SECRETS`. | `LLM_API_KEY` | Choose a stable key name and include the same key in the encrypted JSON secrets map. | Public reference name, not the key | Yes | Yes |
 | `PERSISTENT_AGENT_DA_PROVIDER` | Data Availability backend for persistent state continuity. Persistent Agents require DA. | `hf`, `gcs`, or `pinata` | Choose one supported DA provider from the skills example. | Public config | Yes | Yes |
@@ -98,10 +98,45 @@ Executor config:
 
 LLM config:
 
-- Choose `PERSISTENT_AGENT_LLM_PROVIDER` from `anthropic`, `openai`, `gemini`, `xai`, or `openrouter`.
+- Choose `PERSISTENT_AGENT_LLM_PROVIDER` from `0`/`anthropic`, `1`/`openai`, `2`/`gemini`, `3`/`xai`, or `4`/`openrouter`.
 - Set `PERSISTENT_AGENT_MODEL` to a model id that the provider account can actually call.
 - Put the raw LLM API key only inside the encrypted secrets JSON.
 - Set `PERSISTENT_AGENT_LLM_API_KEY_REF` to the JSON key name, for example `LLM_API_KEY`.
+
+### DeepSeek Through OpenRouter
+
+The latest Ritual dApp Skills Persistent Agent docs confirm this provider enum:
+
+```text
+0 = Anthropic
+1 = OpenAI
+2 = Gemini
+3 = xAI
+4 = OpenRouter
+```
+
+OpenRouter provider enum `4` is supported for Persistent Agent. DeepSeek can be reached through OpenRouter by using an OpenRouter-routable DeepSeek model id:
+
+```bash
+PERSISTENT_AGENT_LLM_PROVIDER=4
+PERSISTENT_AGENT_MODEL=deepseek/deepseek-chat
+PERSISTENT_AGENT_LLM_API_KEY_REF=OPENROUTER_API_KEY
+```
+
+`PERSISTENT_AGENT_LLM_API_KEY_REF` is only the secret name the executor looks up after decrypting `PERSISTENT_AGENT_ENCRYPTED_SECRETS`. It is not the raw API key.
+
+The encrypted secrets bundle must contain the OpenRouter key and the selected DA credential. For example, if the DA provider is Hugging Face, the decrypted JSON shape should be:
+
+```json
+{
+  "OPENROUTER_API_KEY": "<real OpenRouter API key>",
+  "HF_TOKEN": "<real Hugging Face token>"
+}
+```
+
+Encrypt that JSON to the selected executor public key from `TEEServiceRegistry.getServicesByCapability(0, true)` using ECIES with symmetric nonce length `12`. Store only the resulting ciphertext in `PERSISTENT_AGENT_ENCRYPTED_SECRETS`.
+
+Before submitting a real Persistent Agent transaction, verify the OpenRouter account can call `deepseek/deepseek-chat` directly. Do not submit placeholder keys, placeholder DA tokens, or untested model identifiers.
 
 DA config:
 
