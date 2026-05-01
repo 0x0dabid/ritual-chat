@@ -39,10 +39,10 @@ async function main() {
   console.log("Factory address:", factoryAddress);
   console.log("Owner wallet:", ownerAddress);
 
-  const factory = await ethers.getContractAt(
+  const factory = (await ethers.getContractAt(
     "RitualChatSmartAccountFactory",
     factoryAddress,
-  ) as RitualChatSmartAccountFactoryContract;
+  )) as unknown as RitualChatSmartAccountFactoryContract;
   const predictedAccount = await factory.getAccountAddress(ownerAddress);
   let accountCode = await ethers.provider.getCode(predictedAccount);
   let accountDeployed = accountCode !== "0x";
@@ -59,7 +59,7 @@ async function main() {
     }
 
     console.log("Creating smart account for owner:", ownerAddress);
-    const connectedFactory = factory.connect(signer) as RitualChatSmartAccountFactoryContract;
+    const connectedFactory = factory.connect(signer) as unknown as RitualChatSmartAccountFactoryContract;
     const tx = await connectedFactory.createAccount(ownerAddress);
     txHash = tx.hash;
     console.log("Create account tx hash:", txHash);
