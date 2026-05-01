@@ -1,10 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { USE_FILE_STORAGE } from "@/lib/config";
 import type { AgentSession, AppData, ChatMessage, RateLimitRecord } from "@/lib/types";
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const DATA_FILE = path.join(DATA_DIR, "ritual-chat.json");
 
 const initialData: AppData = {
   sessions: [],
@@ -12,9 +7,22 @@ const initialData: AppData = {
   rateLimits: [],
 };
 
+async function getDataPaths() {
+  const path = await import("node:path");
+  const dataDir = path.join(process.cwd(), "data");
+  return {
+    dataDir,
+    dataFile: path.join(dataDir, "ritual-chat.json"),
+  };
+}
+
 async function readData(): Promise<AppData> {
+  if (!USE_FILE_STORAGE) return structuredClone(initialData);
+
   try {
-    const raw = await readFile(DATA_FILE, "utf8");
+    const { readFile } = await import("node:fs/promises");
+    const { dataFile } = await getDataPaths();
+    const raw = await readFile(dataFile, "utf8");
     return JSON.parse(raw) as AppData;
   } catch {
     return structuredClone(initialData);
@@ -23,8 +31,10 @@ async function readData(): Promise<AppData> {
 
 async function writeData(data: AppData) {
   if (!USE_FILE_STORAGE) return;
-  await mkdir(DATA_DIR, { recursive: true });
-  await writeFile(DATA_FILE, JSON.stringify(data, null, 2), "utf8");
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const { dataDir, dataFile } = await getDataPaths();
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(dataFile, JSON.stringify(data, null, 2), "utf8");
 }
 
 export async function getSession(sessionId: string) {

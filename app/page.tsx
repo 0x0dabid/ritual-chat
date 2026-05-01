@@ -25,7 +25,7 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean | null>(null);
 
-  const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE !== "false", [agent]);
+  const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE === "true", [agent]);
   const walletAddress = isConnected && address ? address : null;
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
   const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);

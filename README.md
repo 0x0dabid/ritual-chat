@@ -61,7 +61,7 @@ PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000820
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 
 DATABASE_URL=
-MOCK_MODE=true
+MOCK_MODE=false
 ```
 
 Only `NEXT_PUBLIC_*` values are available to the browser. Keep `RELAYER_PRIVATE_KEY` server-side only and keep only small testnet funds in that wallet.
@@ -77,7 +77,14 @@ Open `http://localhost:3000`.
 
 ## Mock Mode
 
-`MOCK_MODE=true` is the default for local UI testing. It creates fake local smart account addresses, fake Persistent Agent addresses, mock text responses, and fake tx hashes. The UI labels mock mode clearly.
+For local UI-only testing, explicitly set:
+
+```bash
+MOCK_MODE=true
+NEXT_PUBLIC_MOCK_MODE=true
+```
+
+`MOCK_MODE=true` is available for local UI testing only. It creates fake local smart account addresses, fake Persistent Agent addresses, mock text responses, and fake tx hashes. The UI labels mock mode clearly.
 
 Mock mode is not real on-chain execution. Production mode must not use fake tx hashes.
 
@@ -277,7 +284,7 @@ RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 
 In real mode, RITUAL CHAT does not use file-based session storage on Vercel. The connected `walletAddress` is the session identity, and the deterministic smart account is derived from the onchain `RitualChatSmartAccountFactory`. Smart Account status is determined by checking code at the predicted smart account address.
 
-File-backed JSON storage remains for mock/local testing only. A database should be added later for chat history and durable session records, not as the source of truth for smart account ownership.
+File-backed JSON storage remains for mock/local testing only and is disabled on Vercel real mode. A database should be added later for chat history and durable session records, not as the source of truth for smart account ownership.
 
 ## Transaction Links
 

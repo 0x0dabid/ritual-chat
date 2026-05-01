@@ -3,7 +3,8 @@ import type { Address } from "viem";
 export const RITUAL_CHAIN_ID = Number(process.env.NEXT_PUBLIC_RITUAL_CHAIN_ID ?? "1979");
 export const RITUAL_EXPLORER_URL = process.env.NEXT_PUBLIC_RITUAL_EXPLORER_URL ?? "https://explorer.ritualfoundation.org";
 
-export const MOCK_MODE = process.env.MOCK_MODE !== "false";
+export const IS_VERCEL = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
+export const MOCK_MODE = !IS_VERCEL && process.env.MOCK_MODE === "true";
 export const SESSION_KEY_TTL_DAYS = 7;
 export const SESSION_KEY_TTL_HOURS_OPTION = 24;
 
@@ -14,7 +15,6 @@ export const MAX_REQUESTS_PER_IP_PER_DAY = 50;
 export const RITUAL_RPC_URL = process.env.RITUAL_RPC_URL;
 export const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
 export const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
-export const IS_VERCEL = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
 export const USE_FILE_STORAGE = MOCK_MODE || (!IS_VERCEL && process.env.USE_FILE_STORAGE === "true");
 
 export const AA_PROVIDER_KIND = process.env.AA_PROVIDER ?? process.env.AA_PROVIDER_KIND ?? "custom";
