@@ -187,6 +187,23 @@ The backend relayer does not call `PersistentAgentFactory` directly because that
 
 See `docs/persistent-agent-integration.md` for the confirmed factory methods, required env vars, funding notes, events, and current blocker.
 
+### Official DeepSeek API Status
+
+The official DeepSeek API is OpenAI-compatible, but the current Ritual Persistent Agent payload documented in `ritual-dapp-skills` does not expose a custom OpenAI-compatible base URL field. The adapter therefore does not use `PERSISTENT_AGENT_LLM_BASE_URL` yet.
+
+Do not use this as a real Persistent Agent config until Ritual executor support exists:
+
+```bash
+PERSISTENT_AGENT_LLM_PROVIDER=1
+PERSISTENT_AGENT_LLM_BASE_URL=https://api.deepseek.com
+PERSISTENT_AGENT_MODEL=deepseek-chat
+PERSISTENT_AGENT_LLM_API_KEY_REF=DEEPSEEK_API_KEY
+```
+
+If custom endpoint support is added later, `DEEPSEEK_API_KEY` must only be inside `PERSISTENT_AGENT_ENCRYPTED_SECRETS`; `PERSISTENT_AGENT_LLM_API_KEY_REF` is only the secret name.
+
+Current alternatives are documented in `docs/persistent-agent-integration.md`: use OpenRouter provider enum `4`, use a separate backend DeepSeek path, or wait for/add native DeepSeek/custom endpoint support.
+
 ## Deploy Smart Account Factory to Ritual Testnet
 
 Use a fresh deployer wallet with only testnet funds. Never commit `.env.local`.

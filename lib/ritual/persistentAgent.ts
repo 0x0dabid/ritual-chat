@@ -52,7 +52,7 @@ const LLM_PROVIDER_LABELS = {
   1: "OpenAI",
   2: "Gemini",
   3: "xAI",
-  4: "OpenRouter / DeepSeek-compatible",
+  4: "OpenRouter",
 } as const;
 
 export const persistentAgentFactoryAbi = parseAbi([
