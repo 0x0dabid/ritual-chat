@@ -162,6 +162,83 @@ Still pending:
 - Ritual LLM transaction flow through the approved account/session-key path
 - full Ritual Testnet verification of the deployed factory
 
+## Deploy Smart Account Factory to Ritual Testnet
+
+Use a fresh deployer wallet with only testnet funds. Never commit `.env.local`.
+
+1. Create or update `.env.local`:
+
+```bash
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+DEPLOYER_PRIVATE_KEY=0x...
+RELAYER_PRIVATE_KEY=
+AA_PROVIDER=custom
+AA_FACTORY_ADDRESS=
+```
+
+`DEPLOYER_PRIVATE_KEY` is server-only. Do not prefix it with `NEXT_PUBLIC_`.
+
+2. Compile contracts:
+
+```bash
+npm run contracts:compile
+```
+
+3. Run tests:
+
+```bash
+npm run contracts:test
+```
+
+4. Deploy the factory:
+
+```bash
+npm run contracts:deploy:aa
+```
+
+The deploy script prints the deployer address, network chain ID, deployment transaction hash, and:
+
+```bash
+AA_FACTORY_ADDRESS=0x...
+```
+
+It also writes deployment metadata to:
+
+```bash
+deployments/ritual-smart-account-factory.json
+```
+
+5. Copy the printed factory address into `.env.local`:
+
+```bash
+AA_FACTORY_ADDRESS=0x...
+```
+
+6. Verify one wallet can create or load a smart account:
+
+```bash
+TEST_OWNER_ADDRESS=0xYourWalletAddress
+npm run contracts:verify:aa
+```
+
+By default, the verification script creates the predicted smart account if no code exists. To make it read-only:
+
+```bash
+CREATE_ACCOUNT_IF_MISSING=false npm run contracts:verify:aa
+```
+
+The verification script prints the owner wallet, predicted smart account, whether account code exists, and the create-account transaction hash if it deployed one.
+
+### Deployment Troubleshooting
+
+- Missing `RITUAL_RPC_URL`: set it in `.env.local`, for example `https://rpc.ritualfoundation.org`.
+- Missing `DEPLOYER_PRIVATE_KEY`: set a server-only deployer key, or use `RELAYER_PRIVATE_KEY` only if that key is intended to deploy contracts.
+- Deployment reverted: confirm the deployer has testnet RITUAL, the RPC is Ritual Testnet, and the contracts compile locally.
+- Insufficient testnet gas: fund the deployer from the Ritual faucet, then rerun the deploy command.
+- `AA_FACTORY_ADDRESS` not set: copy the printed `AA_FACTORY_ADDRESS=0x...` value into `.env.local`.
+- `createAccount` fails: confirm `AA_FACTORY_ADDRESS` points to `RitualChatSmartAccountFactory` on chain ID `1979`.
+- No code found at predicted smart account: rerun `npm run contracts:verify:aa` with `CREATE_ACCOUNT_IF_MISSING=true` and a funded deployer key.
+
 ## Real Ritual Mode
 
 Set `MOCK_MODE=false`, configure `RITUAL_RPC_URL`, and set a server-only `RELAYER_PRIVATE_KEY`.

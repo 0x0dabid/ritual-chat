@@ -1,6 +1,9 @@
 import "@nomicfoundation/hardhat-toolbox";
 import type { HardhatUserConfig } from "hardhat/config";
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config();
+dotenv.config({ path: ".env.local", override: false });
 
 const deployerPrivateKey = process.env.DEPLOYER_PRIVATE_KEY ?? process.env.RELAYER_PRIVATE_KEY;
 
