@@ -22,9 +22,14 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean | null>(null);
 
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE !== "false", [agent]);
   const walletAddress = isConnected && address ? address : null;
+
+  useEffect(() => {
+    setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
+  }, []);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(SESSION_STORAGE_KEY);
@@ -72,8 +77,14 @@ export default function Home() {
   async function connectWallet() {
     setError(null);
     try {
+      if (hasInjectedWallet === false) {
+        throw new Error("No injected wallet detected. Please install MetaMask or open in a browser with an EVM wallet.");
+      }
+
       const injected = connectors[0];
-      if (!injected) throw new Error("No injected wallet found. Please install MetaMask.");
+      if (!injected) {
+        throw new Error("No injected wallet detected. Please install MetaMask or open in a browser with an EVM wallet.");
+      }
       await connectAsync({ connector: injected });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Wallet connection failed. Please try again.");
@@ -177,6 +188,7 @@ export default function Home() {
               loadingStep={loadingStep}
               walletAddress={walletAddress}
               walletPending={walletPending}
+              noInjectedWallet={hasInjectedWallet === false}
               onConnectWallet={connectWallet}
               onDisconnectWallet={() => disconnect()}
               onCreate={createAgent}

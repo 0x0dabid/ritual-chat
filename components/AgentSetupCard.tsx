@@ -5,6 +5,7 @@ interface AgentSetupCardProps {
   loadingStep: string | null;
   walletAddress: string | null;
   walletPending: boolean;
+  noInjectedWallet: boolean;
   onConnectWallet: () => void;
   onDisconnectWallet: () => void;
   onCreate: () => void;
@@ -19,6 +20,7 @@ export function AgentSetupCard({
   loadingStep,
   walletAddress,
   walletPending,
+  noInjectedWallet,
   onConnectWallet,
   onDisconnectWallet,
   onCreate,
@@ -46,17 +48,22 @@ export function AgentSetupCard({
       <button
         type="button"
         onClick={hasWallet ? onDisconnectWallet : onConnectWallet}
-        disabled={Boolean(loadingStep) || active || walletPending}
+        disabled={Boolean(loadingStep) || walletPending || (!hasWallet && noInjectedWallet)}
         className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {walletPending ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : <Wallet size={18} aria-hidden="true" />}
         {walletAddress ? `Connected ${compact(walletAddress)}` : "Connect Wallet"}
       </button>
+      {noInjectedWallet && !hasWallet ? (
+        <p className="mt-3 text-sm leading-6 text-black/68">
+          No injected wallet detected. Please install MetaMask or open in a browser with an EVM wallet.
+        </p>
+      ) : null}
 
       <button
         type="button"
         onClick={onCreate}
-        disabled={Boolean(loadingStep) || (!hasWallet && !active)}
+        disabled={Boolean(loadingStep) || active || !hasWallet}
         className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
       >
         {loadingStep ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : null}
