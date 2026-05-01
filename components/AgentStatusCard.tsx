@@ -1,4 +1,5 @@
 import type { AgentSession } from "@/lib/types";
+import { groupPersistentAgentMissingConfig } from "@/components/persistentAgentConfigGroups";
 
 interface AgentStatusCardProps {
   session: AgentSession;
@@ -23,6 +24,7 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
   const hasSessionKey = session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000";
   const persistentAgentStatus = session.persistentAgentStatus ?? (hasPersistentAgent ? "active" : "pending");
   const sessionKeyStatus = session.sessionKeyStatus ?? (hasSessionKey ? "active" : "pending");
+  const missingConfigGroups = groupPersistentAgentMissingConfig(session.persistentAgentMissingConfig);
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -84,10 +86,22 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
       </div>
       {session.persistentAgentMissingConfig?.length ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
-          Persistent Agent config is incomplete. Add the required Ritual env vars to enable real agent creation.
-          <span className="mt-2 block break-words font-mono text-xs text-black/58">
-            {session.persistentAgentMissingConfig.join(", ")}
-          </span>
+          <p>
+            Persistent Agent creation requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration.
+            Do not use placeholder values.
+          </p>
+          <div className="mt-3 space-y-2">
+            {missingConfigGroups.map((group) => (
+              <div key={group.title}>
+                <div className="text-xs font-semibold uppercase tracking-wide text-ritual-green">
+                  {group.title}
+                </div>
+                <div className="break-words font-mono text-xs text-black/58">
+                  {group.items.join(", ")}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : null}
     </section>

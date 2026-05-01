@@ -9,6 +9,7 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { TestnetNotice } from "@/components/TestnetNotice";
+import { groupPersistentAgentMissingConfig } from "@/components/persistentAgentConfigGroups";
 import type { AgentSession, ChatMessage } from "@/lib/types";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
@@ -29,6 +30,10 @@ export default function Home() {
   const walletAddress = isConnected && address ? address : null;
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
   const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);
+  const missingConfigGroups = useMemo(
+    () => groupPersistentAgentMissingConfig(agent?.persistentAgentMissingConfig),
+    [agent?.persistentAgentMissingConfig],
+  );
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -216,13 +221,22 @@ export default function Home() {
                 <h2 className="text-lg font-semibold">Next step: Persistent Agent integration</h2>
                 <p className="mt-2 text-sm leading-6 text-black/68">
                   {persistentConfigMissing
-                    ? "Persistent Agent config is incomplete. Add the required Ritual env vars to enable real agent creation."
+                    ? "Persistent Agent creation requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration. Do not use placeholder values."
                     : "Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual's PersistentAgentFactory so it can own a real Persistent Agent."}
                 </p>
                 {persistentConfigMissing ? (
-                  <p className="mt-3 break-words font-mono text-xs leading-5 text-black/58">
-                    {agent?.persistentAgentMissingConfig?.join(", ")}
-                  </p>
+                  <div className="mt-3 space-y-2 text-xs leading-5">
+                    {missingConfigGroups.map((group) => (
+                      <div key={group.title}>
+                        <div className="font-semibold uppercase tracking-wide text-ritual-green">
+                          {group.title}
+                        </div>
+                        <div className="break-words font-mono text-black/58">
+                          {group.items.join(", ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 ) : null}
               </section>
             ) : null}
