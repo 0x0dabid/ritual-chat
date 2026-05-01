@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect, useWalletClient } from "wagmi";
 import { AgentSetupCard } from "@/components/AgentSetupCard";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { ChatWindow } from "@/components/ChatWindow";
@@ -18,6 +18,7 @@ export default function Home() {
   const { address, isConnected } = useAccount();
   const { connectAsync, connectors, isPending: walletPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const { data: walletClient } = useWalletClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [agent, setAgent] = useState<AgentSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -30,6 +31,10 @@ export default function Home() {
   const walletAddress = isConnected && address ? address : null;
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
   const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);
+  const chatReady = Boolean(agent && (
+    agent.status === "active"
+    || (!agent.mockMode && agent.smartAccountStatus === "active" && agent.basicChatStatus === "active")
+  ));
   const missingConfigGroups = useMemo(
     () => groupPersistentAgentMissingConfig(agent?.persistentAgentMissingConfig),
     [agent?.persistentAgentMissingConfig],
@@ -166,6 +171,27 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Ritual LLM response failed");
 
+      if (data.requiresWalletSubmission) {
+        if (!walletClient) throw new Error("Connect your wallet before sending chat transactions.");
+        const txHash = await walletClient.sendTransaction({
+          to: data.txRequest.to,
+          data: data.txRequest.data,
+          gas: 5_000_000n,
+        });
+        const pendingMessage: ChatMessage = {
+          id: data.messageId ?? crypto.randomUUID(),
+          sessionId: agent.id,
+          role: "assistant",
+          content: "Response pending on Ritual Testnet.",
+          txHash,
+          txStatus: "pending",
+          createdAt: new Date().toISOString(),
+        };
+        setMessages((current) => [...current, pendingMessage]);
+        pollTx(txHash);
+        return;
+      }
+
       setMessages((current) => [...current, data.message]);
       pollTx(data.message.txHash);
     } catch (err) {
@@ -221,7 +247,7 @@ export default function Home() {
                 <h2 className="text-lg font-semibold">Next step: Persistent Agent integration</h2>
                 <p className="mt-2 text-sm leading-6 text-black/68">
                   {persistentConfigMissing
-                    ? "Persistent Agent creation requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration. Do not use placeholder values."
+                    ? "Advanced Persistent Agent recognition is pending. Basic chat uses Ritual LLM. Do not use placeholder Persistent Agent values."
                     : "Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual's PersistentAgentFactory so it can own a real Persistent Agent."}
                 </p>
                 {persistentConfigMissing ? (
@@ -243,7 +269,7 @@ export default function Home() {
             {agent ? <AgentStatusCard session={agent} /> : null}
           </div>
           <ChatWindow
-            disabled={!agent || agent.status !== "active"}
+            disabled={!chatReady}
             messages={messages}
             onSend={sendMessage}
           />

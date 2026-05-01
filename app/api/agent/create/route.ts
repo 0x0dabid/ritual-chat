@@ -63,6 +63,8 @@ export async function POST(request: Request) {
         status: session.status,
         smartAccountStatus: "active",
         persistentAgentStatus: session.persistentAgentStatus ?? "pending",
+        basicChatStatus: session.basicChatStatus ?? "pending",
+        basicChatStatusMessage: session.basicChatStatusMessage,
         sessionKeyStatus: "pending",
         persistentAgentMissingConfig: session.persistentAgentMissingConfig,
         message: session.persistentAgentStatusMessage
@@ -103,6 +105,8 @@ export async function POST(request: Request) {
       persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
       persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
       persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
+      basicChatStatus: "active",
+      basicChatStatusMessage: "Mock mode chat is active.",
       sessionKeyAddress: sessionKey.sessionKeyAddress,
       sessionKeyStatus: MOCK_MODE ? "active" : "pending",
       sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,

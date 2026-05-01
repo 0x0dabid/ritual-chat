@@ -12,6 +12,7 @@
     "contracts:test": "hardhat test",
     "contracts:deploy:ritual": "hardhat run scripts/deploy-smart-account-factory.ts --network ritual",
     "contracts:deploy:aa": "hardhat run scripts/deploy-smart-account-factory.ts --network ritual",
+    "contracts:deploy:chat": "hardhat run scripts/deploy-chat-manager.ts --network ritual",
     "contracts:verify:aa": "hardhat run scripts/verify-smart-account-factory.ts --network ritual"
   },
   "dependencies": {

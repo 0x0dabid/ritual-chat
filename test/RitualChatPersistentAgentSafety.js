@@ -2,6 +2,7 @@ const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 
 const PERSISTENT_AGENT_FACTORY = "0xD4AA9D55215dc8149Af57605e70921Ea16b73591";
+const CHAT_MANAGER = "0x000000000000000000000000000000000000cafe";
 
 describe("RitualChat persistent agent safety", function () {
   async function deployFixture() {
@@ -33,19 +34,21 @@ describe("RitualChat persistent agent safety", function () {
     ).to.be.revertedWithCustomError(account, "TargetNotAllowed");
   });
 
-  it("allows only the PersistentAgentFactory target when explicitly approved", async function () {
+  it("allows only the RitualChatManager target when explicitly approved", async function () {
     const { factoryOwner, walletOwner, sessionKey, target, factory, account } = await deployFixture();
     const latest = await ethers.provider.getBlock("latest");
     await account.connect(walletOwner).setSessionKey(sessionKey.address, latest.timestamp + 3600);
-    await factory.connect(factoryOwner).setApprovedChatTarget(PERSISTENT_AGENT_FACTORY, true);
+    await factory.connect(factoryOwner).setApprovedChatTarget(CHAT_MANAGER, true);
 
     await network.provider.send("hardhat_setCode", [
-      PERSISTENT_AGENT_FACTORY,
+      CHAT_MANAGER,
       "0x60006000f3",
     ]);
 
-    await expect(account.connect(sessionKey).executeChatCall(PERSISTENT_AGENT_FACTORY, "0x"))
+    await expect(account.connect(sessionKey).executeChatCall(CHAT_MANAGER, "0x"))
       .to.emit(account, "ChatCallExecuted");
+    await expect(account.connect(sessionKey).executeChatCall(PERSISTENT_AGENT_FACTORY, "0x"))
+      .to.be.revertedWithCustomError(account, "TargetNotAllowed");
     await expect(account.connect(sessionKey).executeChatCall(target.address, "0x"))
       .to.be.revertedWithCustomError(account, "TargetNotAllowed");
   });

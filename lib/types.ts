@@ -15,6 +15,8 @@ export interface AgentSession {
   persistentAgentStatusMessage?: string;
   persistentAgentProviderLabel?: string;
   persistentAgentMissingConfig?: string[];
+  basicChatStatus?: IntegrationStatus;
+  basicChatStatusMessage?: string;
   sessionKeyAddress: string;
   sessionKeyStatus?: IntegrationStatus;
   sessionKeyExpiresAt: string;

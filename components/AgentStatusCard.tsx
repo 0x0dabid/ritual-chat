@@ -48,6 +48,7 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
                 : "Pending Ritual integration"}
         />
         <Row label="Persistent Agent Status" value={persistentAgentStatus[0].toUpperCase() + persistentAgentStatus.slice(1)} />
+        <Row label="Basic Chat" value={session.basicChatStatus === "active" ? "Active via Ritual LLM" : "Pending Chat Manager"} />
         {session.persistentAgentProviderLabel ? (
           <Row label="LLM Provider" value={session.persistentAgentProviderLabel} />
         ) : null}
@@ -90,8 +91,8 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
       {session.persistentAgentMissingConfig?.length ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
           <p>
-            Persistent Agent creation requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration.
-            Do not use placeholder values.
+            Advanced Persistent Agent recognition is pending. Basic chat uses Ritual LLM.
+            Persistent Agent creation still requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration.
           </p>
           <div className="mt-3 space-y-2">
             {missingConfigGroups.map((group) => (

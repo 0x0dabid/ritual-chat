@@ -59,6 +59,8 @@ RELAYER_PRIVATE_KEY=
 PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
 PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000820
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
+RITUAL_LLM_EXECUTOR_ADDRESS=
+CHAT_MANAGER_ADDRESS=
 
 DATABASE_URL=
 STORAGE_DRIVER=memory
@@ -187,6 +189,43 @@ The backend relayer does not call `PersistentAgentFactory` directly because that
 
 See `docs/persistent-agent-integration.md` for the confirmed factory methods, required env vars, funding notes, events, and current blocker.
 
+## Basic Ritual LLM Chat
+
+For v1, basic text chat uses the Ritual LLM precompile (`0x0802`) through `RitualChatManager`. Persistent Agent recognition remains an advanced integration and is not required for basic chat.
+
+Flow:
+
+```text
+connected wallet -> Ritual Chat Smart Account -> RitualChatManager -> Ritual LLM precompile 0x0802
+```
+
+Deploy the chat manager after selecting a live LLM executor from `TEEServiceRegistry` with LLM capability `1`:
+
+```bash
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+DEPLOYER_PRIVATE_KEY=0x...
+AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
+RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
+RITUAL_LLM_EXECUTOR_ADDRESS=0x...
+npm run contracts:deploy:chat
+```
+
+The deploy script prints:
+
+```bash
+CHAT_MANAGER_ADDRESS=0x...
+```
+
+Set that in `.env.local` / Vercel:
+
+```bash
+CHAT_MANAGER_ADDRESS=0x...
+```
+
+The script also allowlists `CHAT_MANAGER_ADDRESS` on `RitualChatSmartAccountFactory` when `AA_FACTORY_ADDRESS` is configured and the deployer owns the factory. Do not allowlist arbitrary targets.
+
+Until real session-key sponsorship is wired, the connected wallet submits the smart-account chat transaction. The UI shows `Response pending on Ritual Testnet.` with the real transaction hash and then tracks confirmation.
+
 ### Official DeepSeek API Status
 
 The official DeepSeek API is OpenAI-compatible, but the current Ritual Persistent Agent payload documented in `ritual-dapp-skills` does not expose a custom OpenAI-compatible base URL field. The adapter therefore does not use `PERSISTENT_AGENT_LLM_BASE_URL` yet.
@@ -303,6 +342,8 @@ NEXT_PUBLIC_RITUAL_EXPLORER_URL=https://explorer.ritualfoundation.org
 NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
+RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
+CHAT_MANAGER_ADDRESS=0x...
 PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
 PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0820
 ```

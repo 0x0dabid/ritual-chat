@@ -1,5 +1,6 @@
 import { type Address } from "viem";
 import { addressExplorerLink } from "@/lib/config";
+import { getBasicChatStatusMessage, isBasicChatConfigured } from "@/lib/ritual/llm";
 import { createOrLoadPersistentAgent, type PersistentAgentResult } from "@/lib/ritual/persistentAgent";
 import { getPublicClient } from "@/lib/ritual/chain";
 import { getSmartAccountAddress } from "@/lib/ritual/smartAccount";
@@ -35,6 +36,7 @@ export async function buildRealSession(params: {
     smartAccountAddress: params.smartAccountAddress,
   });
   const persistentAgentResult = normalizePersistentAgentResult(persistentAgent);
+  const basicChatEnabled = isBasicChatConfigured();
   const now = new Date().toISOString();
 
   return {
@@ -49,6 +51,8 @@ export async function buildRealSession(params: {
     persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
     persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
     persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
+    basicChatStatus: basicChatEnabled ? "active" : "pending",
+    basicChatStatusMessage: getBasicChatStatusMessage(),
     sessionKeyAddress: ZERO_ADDRESS,
     sessionKeyStatus: "pending",
     sessionKeyExpiresAt: new Date(0).toISOString(),

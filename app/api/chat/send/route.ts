@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
 import { MOCK_MODE, RITUAL_LLM_PRECOMPILE_ADDRESS } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkSmartAccountRateLimit } from "@/lib/rateLimit";
-import { buildLlmCallData, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
+import { buildLlmCallData, buildSmartAccountChatCall, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
 import { checkRelayerBalance, submitRelayedTransaction } from "@/lib/ritual/relayer";
 import { getOnchainSmartAccountSession } from "@/lib/ritual/realSession";
 import { validateSessionKey } from "@/lib/ritual/smartAccount";
@@ -21,10 +21,42 @@ export async function POST(request: Request) {
       ?? (!MOCK_MODE && isAddress(sessionId) ? await getOnchainSmartAccountSession(sessionId as Address) : null);
 
     if (!session) throw new Error("Create your Persistent Ritual Agent before chatting.");
-    if (session.status !== "active") throw new Error("Chat is disabled until the Persistent Agent is active.");
     if (!isAddress(session.userWallet)) throw new Error("Connect your wallet before chatting.");
-    await validateSessionKey(session);
     await checkSmartAccountRateLimit(ip, session.smartAccountAddress, "chat:aa");
+
+    if (!MOCK_MODE) {
+      if (session.smartAccountStatus !== "active") {
+        throw new Error("Chat is disabled until the Smart Account is active.");
+      }
+      if (session.basicChatStatus !== "active") {
+        throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
+      }
+
+      const txRequest = buildSmartAccountChatCall({
+        smartAccountAddress: session.smartAccountAddress as Address,
+        prompt,
+      });
+      const userMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        sessionId: session.id,
+        role: "user",
+        content: prompt,
+        txStatus: "confirmed",
+        createdAt: new Date().toISOString(),
+      };
+      await addChatMessage(userMessage);
+
+      return NextResponse.json({
+        txStatus: "pending",
+        assistantResponse: "Response pending on Ritual Testnet.",
+        messageId: crypto.randomUUID(),
+        requiresWalletSubmission: true,
+        txRequest,
+      });
+    }
+
+    if (session.status !== "active") throw new Error("Chat is disabled until the Persistent Agent is active.");
+    await validateSessionKey(session);
     await checkRelayerBalance();
 
     const userMessage: ChatMessage = {
@@ -71,7 +103,12 @@ export async function POST(request: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Ritual LLM response failed. Please try again.";
-    const status = message.includes("too long") || message.includes("empty") ? 400 : 429;
+    const status = message.includes("too long")
+      || message.includes("empty")
+      || message.includes("disabled")
+      || message.includes("configured")
+      ? 400
+      : 429;
     return NextResponse.json({ error: message }, { status });
   }
 }

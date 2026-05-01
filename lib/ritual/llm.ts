@@ -1,12 +1,23 @@
 import {
   decodeAbiParameters,
   encodeAbiParameters,
+  encodeFunctionData,
+  isAddress,
+  parseAbi,
   parseAbiParameters,
   type Address,
   type Hex,
 } from "viem";
-import { MAX_PROMPT_LENGTH, MOCK_MODE, RITUAL_LIVE_TEXT_MODEL } from "@/lib/config";
+import { CHAT_MANAGER_ADDRESS, MAX_PROMPT_LENGTH, MOCK_MODE, RITUAL_LIVE_TEXT_MODEL } from "@/lib/config";
 import { mockAssistantResponse } from "@/lib/mock";
+
+export const ritualChatManagerAbi = parseAbi([
+  "function sendChatMessage(string prompt) returns (bytes output)",
+]);
+
+export const ritualChatSmartAccountAbi = parseAbi([
+  "function executeChatCall(address target, bytes data) returns (bytes result)",
+]);
 
 export function validatePrompt(prompt: string) {
   const trimmed = prompt.trim();
@@ -25,6 +36,46 @@ export async function sendPromptToRitualLLM(prompt: string) {
   // In real mode this text is decoded from the settled Ritual LLM response. The
   // relayer submits only the encoded, approved call built by buildLlmCallData().
   return "Waiting for Ritual Testnet confirmation...";
+}
+
+export function isBasicChatConfigured() {
+  return Boolean(CHAT_MANAGER_ADDRESS && isAddress(CHAT_MANAGER_ADDRESS));
+}
+
+export function getBasicChatStatusMessage() {
+  return isBasicChatConfigured()
+    ? "Basic chat uses Ritual LLM."
+    : "Basic chat is pending CHAT_MANAGER_ADDRESS configuration.";
+}
+
+export function buildChatManagerCallData(prompt: string) {
+  return encodeFunctionData({
+    abi: ritualChatManagerAbi,
+    functionName: "sendChatMessage",
+    args: [validatePrompt(prompt)],
+  });
+}
+
+export function buildSmartAccountChatCall(params: {
+  smartAccountAddress: Address;
+  prompt: string;
+}) {
+  if (!isBasicChatConfigured()) {
+    throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
+  }
+
+  const managerData = buildChatManagerCallData(params.prompt);
+  const data = encodeFunctionData({
+    abi: ritualChatSmartAccountAbi,
+    functionName: "executeChatCall",
+    args: [CHAT_MANAGER_ADDRESS!, managerData],
+  });
+
+  return {
+    to: params.smartAccountAddress,
+    data,
+    chatManagerAddress: CHAT_MANAGER_ADDRESS!,
+  };
 }
 
 export function buildLlmCallData(params: {
