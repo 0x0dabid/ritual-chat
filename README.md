@@ -237,6 +237,36 @@ The script also allowlists `CHAT_MANAGER_ADDRESS` on `RitualChatSmartAccountFact
 
 Until real session-key sponsorship is wired, the connected wallet submits the smart-account chat transaction. The UI shows `Response pending on Ritual Testnet.` with the real transaction hash and then tracks confirmation.
 
+### How to find RITUAL_LLM_EXECUTOR_ADDRESS
+
+Ritual LLM precompile `0x0802` requires a live TEE executor from `TEEServiceRegistry` with LLM capability `1`. Do not hardcode a fake executor address.
+
+Set the RPC URL:
+
+```bash
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+```
+
+Then run:
+
+```bash
+npm run ritual:list-llm-executors
+```
+
+The script reads `TEEServiceRegistry` at:
+
+```bash
+TEE_SERVICE_REGISTRY_ADDRESS=0x9644e8562cE0Fe12b4deeC4163c064A8862Bf47F
+```
+
+It queries LLM capability `1`, prints live executor addresses, public keys, and registry metadata, then prints a copy-ready value:
+
+```bash
+RITUAL_LLM_EXECUTOR_ADDRESS=0x...
+```
+
+Use the printed executor address when deploying `RitualChatManager`. The dApp uses the executor `teeAddress` and public key; the registry endpoint is intentionally not used by this app flow.
+
 ### Official DeepSeek API Status
 
 The official DeepSeek API is OpenAI-compatible, but the current Ritual Persistent Agent payload documented in `ritual-dapp-skills` does not expose a custom OpenAI-compatible base URL field. The adapter therefore does not use `PERSISTENT_AGENT_LLM_BASE_URL` yet.
