@@ -1,6 +1,13 @@
 import hardhat from "hardhat";
+import type { BaseContract, ContractTransactionResponse, Signer } from "ethers";
 
 const { ethers } = hardhat;
+
+type RitualChatSmartAccountFactoryContract = BaseContract & {
+  getAccountAddress(owner: string): Promise<string>;
+  createAccount(owner: string): Promise<ContractTransactionResponse>;
+  connect(runner: Signer): RitualChatSmartAccountFactoryContract;
+};
 
 function requireAddress(value: string | undefined, label: string) {
   if (!value) {
@@ -32,7 +39,10 @@ async function main() {
   console.log("Factory address:", factoryAddress);
   console.log("Owner wallet:", ownerAddress);
 
-  const factory = await ethers.getContractAt("RitualChatSmartAccountFactory", factoryAddress);
+  const factory = await ethers.getContractAt(
+    "RitualChatSmartAccountFactory",
+    factoryAddress,
+  ) as RitualChatSmartAccountFactoryContract;
   const predictedAccount = await factory.getAccountAddress(ownerAddress);
   let accountCode = await ethers.provider.getCode(predictedAccount);
   let accountDeployed = accountCode !== "0x";
@@ -49,7 +59,8 @@ async function main() {
     }
 
     console.log("Creating smart account for owner:", ownerAddress);
-    const tx = await factory.connect(signer).createAccount(ownerAddress);
+    const connectedFactory = factory.connect(signer) as RitualChatSmartAccountFactoryContract;
+    const tx = await connectedFactory.createAccount(ownerAddress);
     txHash = tx.hash;
     console.log("Create account tx hash:", txHash);
     await tx.wait();

@@ -1,5 +1,5 @@
 import { http, createConfig } from "wagmi";
-import { injected } from "wagmi/connectors";
+import { injected } from "@wagmi/core";
 import { defineChain } from "viem";
 
 const ritualChainId = Number(process.env.NEXT_PUBLIC_RITUAL_CHAIN_ID ?? "1979");
