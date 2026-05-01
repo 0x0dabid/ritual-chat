@@ -1,8 +1,7 @@
 import { isAddress, type Address } from "viem";
-import { RELAYER_PRIVATE_KEY } from "@/lib/config";
+import { RELAYER_PRIVATE_KEY, SESSION_KEY_TTL_HOURS } from "@/lib/config";
 import {
   buildSetSessionKeyCall,
-  getSessionKeyExpiry,
   getSmartAccountOwner,
   getSessionExecutorAccount,
   ritualChatSmartAccountAbi,
@@ -62,9 +61,9 @@ export async function prepareSessionAuthorization(params: {
     throw new Error("Invalid session key or expiry.");
   }
 
-  const expiry = getSessionKeyExpiry();
-  const expiresAtSeconds = BigInt(Math.floor(expiry.getTime() / 1000));
-  if (expiresAtSeconds <= BigInt(Math.floor(Date.now() / 1000))) {
+  const { expiry, expiresAtSeconds } = await getChainSessionKeyExpiry(publicClient);
+  const latestBlock = await publicClient.getBlock();
+  if (expiresAtSeconds <= latestBlock.timestamp) {
     throw new Error("Invalid session key or expiry.");
   }
 
@@ -141,9 +140,9 @@ export async function inspectSessionAuthorization(walletAddress: Address): Promi
     if (RELAYER_PRIVATE_KEY) {
       const sessionExecutor = getSessionExecutorAccount();
       expectedSessionKeyAddress = sessionExecutor.address;
-      const expiry = getSessionKeyExpiry();
-      expiresAt = expiry.toISOString();
-      expiresAtSeconds = BigInt(Math.floor(expiry.getTime() / 1000));
+      const expiryResult = await getChainSessionKeyExpiry(publicClient);
+      expiresAt = expiryResult.expiry.toISOString();
+      expiresAtSeconds = expiryResult.expiresAtSeconds;
       data = buildSetSessionKeyCall(expectedSessionKeyAddress, expiresAtSeconds);
     }
 
@@ -153,7 +152,7 @@ export async function inspectSessionAuthorization(walletAddress: Address): Promi
     else if (!RELAYER_PRIVATE_KEY) simulationError = "Missing RELAYER_PRIVATE_KEY. Cannot create session key.";
     else if (!smartAccountOwner || smartAccountOwner.toLowerCase() !== walletAddress.toLowerCase()) {
       simulationError = "Connected wallet is not the owner of this smart account.";
-    } else if (expiresAtSeconds <= BigInt(Math.floor(Date.now() / 1000))) {
+    } else if (expiresAtSeconds <= (await publicClient.getBlock()).timestamp) {
       simulationError = "Invalid session key or expiry.";
     } else {
       const ownerBalance = await publicClient.getBalance({ address: walletAddress });
@@ -221,6 +220,16 @@ function mapSessionAuthorizationSimulationError(err: unknown) {
     return "Session authorization needs more gas. Let MetaMask estimate gas and try again.";
   }
   return "Session authorization would revert. Check owner, network, session key, and expiry.";
+}
+
+async function getChainSessionKeyExpiry(publicClient: ReturnType<typeof getPublicClient>) {
+  const latestBlock = await publicClient.getBlock();
+  const ttlSeconds = BigInt(Math.ceil(SESSION_KEY_TTL_HOURS * 60 * 60));
+  const expiresAtSeconds = latestBlock.timestamp + ttlSeconds;
+  return {
+    expiresAtSeconds,
+    expiry: new Date(Number(expiresAtSeconds) * 1000),
+  };
 }
 
 function collectErrorText(err: unknown): string {

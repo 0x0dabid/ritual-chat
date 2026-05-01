@@ -7,7 +7,7 @@ export const IS_VERCEL = process.env.VERCEL === "1" || Boolean(process.env.VERCE
 export const MOCK_MODE = !IS_VERCEL && process.env.MOCK_MODE === "true";
 export const SESSION_KEY_TTL_DAYS = 7;
 export const SESSION_KEY_TTL_HOURS_OPTION = 24;
-export const SESSION_KEY_TTL_HOURS = Number(process.env.SESSION_KEY_TTL_HOURS ?? "24");
+export const SESSION_KEY_TTL_HOURS = parsePositiveNumber(process.env.SESSION_KEY_TTL_HOURS, 24);
 
 export const MAX_PROMPT_LENGTH = 1000;
 export const MAX_CHAT_MESSAGES_PER_AA_PER_DAY = 20;
@@ -77,4 +77,10 @@ export function txExplorerLink(txHash: string) {
 
 export function addressExplorerLink(address: string) {
   return `${RITUAL_EXPLORER_URL}/address/${address}`;
+}
+
+function parsePositiveNumber(value: string | undefined, fallback: number) {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
