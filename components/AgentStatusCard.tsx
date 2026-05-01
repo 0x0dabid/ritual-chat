@@ -2,6 +2,8 @@ import type { AgentSession } from "@/lib/types";
 
 interface AgentStatusCardProps {
   session: AgentSession;
+  fundingPending?: boolean;
+  onFundSmartAccount?: () => void;
 }
 
 function compact(value: string) {
@@ -17,7 +19,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function AgentStatusCard({ session }: AgentStatusCardProps) {
+export function AgentStatusCard({ session, fundingPending = false, onFundSmartAccount }: AgentStatusCardProps) {
   const chatStatus = session.chatStatus ?? (session.basicChatStatus === "active" ? "ready" : "missing-chat-manager");
   const chatStatusLabel = chatStatus === "ready"
     ? "Ready"
@@ -35,7 +37,11 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
     : "Unknown";
   const sessionKeyLabel = session.sessionKeyStatus === "active"
     ? "Active"
-    : "Pending authorization";
+    : session.sessionKeyStatus === "expired"
+      ? "Expired"
+      : "Pending authorization";
+  const authorizedSessionAddress = session.sessionKeyStatus === "active"
+    && session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -53,9 +59,11 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
         <Row label="Balance" value={balanceLabel} />
         <Row label="Minimum Balance" value={session.hasMinimumSmartAccountBalance ? "Met" : "Fund needed"} />
         <Row label="Session Key" value={sessionKeyLabel} />
-        {session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000" ? (
+        {authorizedSessionAddress ? (
           <Row label="Session Address" value={<span title={session.sessionKeyAddress}>{compact(session.sessionKeyAddress)}</span>} />
-        ) : null}
+        ) : (
+          <Row label="Session Address" value="Not authorized" />
+        )}
         <Row label="Chat Status" value={chatStatusLabel} />
         <Row
           label="Explorer"
@@ -71,15 +79,25 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
           )}
         />
       </div>
+      {!session.hasMinimumSmartAccountBalance && onFundSmartAccount ? (
+        <button
+          type="button"
+          onClick={onFundSmartAccount}
+          disabled={fundingPending}
+          className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
+        >
+          {fundingPending ? "Funding Smart Account..." : "Fund Smart Account 0.01 RITUAL"}
+        </button>
+      ) : null}
       {chatStatus !== "ready" ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
           {chatStatus === "needs-funding"
-            ? "Fund your Ritual Smart Account with a small amount of testnet RITUAL before chatting."
+            ? "Fund your Ritual Smart Account before chatting."
             : chatStatus === "needs-session-key"
-              ? "Authorize the limited chat session key once to chat without wallet popups."
+              ? "Authorize the chat session key before chatting."
               : chatStatus === "target-not-approved"
-                ? "CHAT_MANAGER_ADDRESS must be approved on the smart account factory before chat can run."
-                : "Configure CHAT_MANAGER_ADDRESS before using Ritual LLM chat."}
+                ? "ChatManager is not approved yet."
+                : "ChatManager is not configured yet."}
         </div>
       ) : null}
     </section>

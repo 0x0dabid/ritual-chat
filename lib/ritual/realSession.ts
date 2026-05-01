@@ -1,7 +1,7 @@
 import { formatEther, isAddress, type Address } from "viem";
 import { addressExplorerLink, CHAT_MANAGER_ADDRESS, MIN_SMART_ACCOUNT_BALANCE_WEI } from "@/lib/config";
 import { getBasicChatStatusMessage, isBasicChatConfigured } from "@/lib/ritual/llm";
-import { isChatTargetApproved } from "@/lib/ritual/aa/realAAProvider";
+import { getSmartAccountSessionKeyState, isChatTargetApproved } from "@/lib/ritual/aa/realAAProvider";
 import { getPublicClient } from "@/lib/ritual/chain";
 import { createSessionKey, getSmartAccountAddress, validateSessionKey } from "@/lib/ritual/smartAccount";
 import type { AgentSession } from "@/lib/types";
@@ -36,23 +36,28 @@ export async function buildRealSession(params: {
     walletAddress: params.walletAddress,
     smartAccountAddress: params.smartAccountAddress,
   });
-  let sessionKeyStatus: AgentSession["sessionKeyStatus"] = "pending";
-  try {
-    await validateSessionKey({
-      id: sessionId,
-      userWallet: params.walletAddress,
-      smartAccountAddress: params.smartAccountAddress,
-      sessionKeyAddress: sessionKey.sessionKeyAddress,
-      sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
-      status: "active",
-      explorerLink: addressExplorerLink(params.smartAccountAddress),
-      createdAt: params.createdAt ?? new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      mockMode: false,
-    });
-    sessionKeyStatus = "active";
-  } catch {
-    sessionKeyStatus = "pending";
+  const sessionKeyState = await getSmartAccountSessionKeyState({
+    smartAccountAddress: params.smartAccountAddress,
+    expectedSessionKeyAddress: sessionKey.sessionKeyAddress,
+  });
+  let sessionKeyStatus: AgentSession["sessionKeyStatus"] = sessionKeyState.sessionKeyStatus;
+  if (sessionKeyStatus === "active") {
+    try {
+      await validateSessionKey({
+        id: sessionId,
+        userWallet: params.walletAddress,
+        smartAccountAddress: params.smartAccountAddress,
+        sessionKeyAddress: sessionKey.sessionKeyAddress,
+        sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
+        status: "active",
+        explorerLink: addressExplorerLink(params.smartAccountAddress),
+        createdAt: params.createdAt ?? new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        mockMode: false,
+      });
+    } catch {
+      sessionKeyStatus = "pending";
+    }
   }
   const chatTargetApproved = Boolean(
     CHAT_MANAGER_ADDRESS && isAddress(CHAT_MANAGER_ADDRESS) && await isChatTargetApproved(CHAT_MANAGER_ADDRESS),
@@ -82,9 +87,9 @@ export async function buildRealSession(params: {
     basicChatStatusMessage: getBasicChatStatusMessage(),
     chatTargetApproved,
     chatStatus,
-    sessionKeyAddress: sessionKey.sessionKeyAddress,
+    sessionKeyAddress: sessionKeyState.sessionKeyAddress,
     sessionKeyStatus,
-    sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
+    sessionKeyExpiresAt: sessionKeyState.sessionKeyExpiresAt ?? sessionKey.sessionKeyExpiresAt,
     status: "active",
     explorerLink: addressExplorerLink(params.smartAccountAddress),
     createdAt: params.createdAt ?? now,

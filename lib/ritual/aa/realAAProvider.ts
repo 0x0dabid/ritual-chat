@@ -238,6 +238,42 @@ export function buildSetSessionKeyCall(sessionKeyAddress: Address, expiresAt: bi
   });
 }
 
+export async function getSmartAccountSessionKeyState(params: {
+  smartAccountAddress: Address;
+  expectedSessionKeyAddress: Address;
+}) {
+  const [storedSessionKey, expiresAt, valid] = await Promise.all([
+    getPublicClient().readContract({
+      address: params.smartAccountAddress,
+      abi: ritualChatSmartAccountAbi,
+      functionName: "sessionKey",
+    }),
+    getPublicClient().readContract({
+      address: params.smartAccountAddress,
+      abi: ritualChatSmartAccountAbi,
+      functionName: "sessionKeyExpiresAt",
+    }),
+    getPublicClient().readContract({
+      address: params.smartAccountAddress,
+      abi: ritualChatSmartAccountAbi,
+      functionName: "isValidSessionKey",
+      args: [params.expectedSessionKeyAddress],
+    }),
+  ]);
+
+  const zeroAddress = "0x0000000000000000000000000000000000000000";
+  const matchesExpected = storedSessionKey.toLowerCase() === params.expectedSessionKeyAddress.toLowerCase();
+  const expiresAtSeconds = Number(expiresAt);
+  const isExpired = matchesExpected && expiresAtSeconds > 0 && expiresAtSeconds <= Math.floor(Date.now() / 1000);
+
+  return {
+    storedSessionKey,
+    sessionKeyAddress: matchesExpected ? storedSessionKey : zeroAddress,
+    sessionKeyExpiresAt: expiresAtSeconds > 0 ? new Date(expiresAtSeconds * 1000).toISOString() : null,
+    sessionKeyStatus: valid && matchesExpected ? "active" as const : isExpired ? "expired" as const : "pending" as const,
+  };
+}
+
 export async function isChatTargetApproved(target: Address) {
   if (!target || !isAddress(target)) return false;
   return getPublicClient().readContract({
