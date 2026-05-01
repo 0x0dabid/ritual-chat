@@ -1,6 +1,8 @@
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { ethers } from "hardhat";
+import hardhat from "hardhat";
+
+const { ethers } = hardhat;
 
 async function main() {
   if (!process.env.RITUAL_RPC_URL) {

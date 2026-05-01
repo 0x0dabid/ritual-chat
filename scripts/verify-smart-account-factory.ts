@@ -1,4 +1,6 @@
-import { ethers } from "hardhat";
+import hardhat from "hardhat";
+
+const { ethers } = hardhat;
 
 function requireAddress(value: string | undefined, label: string) {
   if (!value) {
