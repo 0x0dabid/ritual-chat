@@ -1,57 +1,46 @@
-import { privateKeyToAccount } from "viem/accounts";
-import { addDays } from "@/lib/time";
-import { MOCK_MODE, RELAYER_PRIVATE_KEY, SESSION_KEY_TTL_DAYS } from "@/lib/config";
-import { mockAddress } from "@/lib/mock";
+import { isAddress, type Address } from "viem";
+import { getAAProviderAdapter } from "@/lib/ritual/aa";
 import type { AgentSession } from "@/lib/types";
 
 export async function createOrLoadSmartAccount(params: {
-  sessionId: string;
   userWallet: string;
   existing?: AgentSession | null;
 }) {
-  const { sessionId, userWallet, existing } = params;
-  if (existing) return existing.smartAccountAddress;
+  const { userWallet, existing } = params;
+  if (existing) return existing.smartAccountAddress as Address;
+  if (!isAddress(userWallet)) throw new Error("Invalid EVM wallet address.");
 
-  if (MOCK_MODE) {
-    return mockAddress(`aa:${userWallet || sessionId}`);
-  }
-
-  // Confirmed Ritual docs do not prescribe a single AA implementation. Production
-  // deployments should integrate the chosen ERC-4337/passkey smart-account factory
-  // here. The relayer may submit/sponsor the deploy, but the smart account owner
-  // must be the user's wallet/session key, not the relayer.
-  // TODO(real-aa): Select the AA provider/factory, deploy or load one account per
-  // user wallet, and return the deterministic smart-account address from here.
-  throw new Error("Smart account creation failed. Configure a production AA factory before disabling MOCK_MODE.");
+  const aaProvider = getAAProviderAdapter();
+  return aaProvider.createOrLoadSmartAccount(userWallet);
 }
 
-export function getSmartAccountAddress(session: AgentSession) {
-  return session.smartAccountAddress;
+export async function getSmartAccountAddress(walletAddress: string) {
+  if (!isAddress(walletAddress)) throw new Error("Invalid EVM wallet address.");
+  return getAAProviderAdapter().getSmartAccountAddress(walletAddress);
 }
 
-export async function createSessionKey(sessionId: string) {
-  if (MOCK_MODE) {
-    return {
-      sessionKeyAddress: mockAddress(`session-key:${sessionId}`),
-      sessionKeyExpiresAt: addDays(new Date(), SESSION_KEY_TTL_DAYS).toISOString(),
-    };
-  }
+export async function createSessionKey(params: {
+  walletAddress: string;
+  smartAccountAddress: string;
+}) {
+  const { walletAddress, smartAccountAddress } = params;
+  if (!isAddress(walletAddress)) throw new Error("Invalid EVM wallet address.");
+  if (!isAddress(smartAccountAddress)) throw new Error("Invalid smart account address.");
 
-  if (!RELAYER_PRIVATE_KEY) {
-    throw new Error("Relayer unavailable. Set RELAYER_PRIVATE_KEY on the server.");
-  }
-
-  // TODO(real-aa): Replace this placeholder with a scoped session key installed
-  // on the user's AA account. It must only authorize chat/check/retry calls.
-  const relayer = privateKeyToAccount(RELAYER_PRIVATE_KEY);
-  return {
-    sessionKeyAddress: relayer.address,
-    sessionKeyExpiresAt: addDays(new Date(), SESSION_KEY_TTL_DAYS).toISOString(),
-  };
+  return getAAProviderAdapter().createSessionKey(walletAddress, smartAccountAddress);
 }
 
-export function validateSessionKey(session: AgentSession) {
+export async function validateSessionKey(session: AgentSession) {
   if (new Date(session.sessionKeyExpiresAt).getTime() <= Date.now()) {
+    throw new Error("Session key creation failed. Please create a new chat session.");
+  }
+
+  if (!isAddress(session.sessionKeyAddress)) {
+    throw new Error("Session key creation failed. Please create a new chat session.");
+  }
+
+  const isValid = await getAAProviderAdapter().validateSessionKey(session.sessionKeyAddress);
+  if (!isValid) {
     throw new Error("Session key creation failed. Please create a new chat session.");
   }
 }

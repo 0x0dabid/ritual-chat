@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     if (!session) throw new Error("Create your Persistent Ritual Agent before chatting.");
     if (session.status !== "active") throw new Error("Agent creation failed. Please try again.");
     if (!isAddress(session.userWallet)) throw new Error("Connect your wallet before chatting.");
-    validateSessionKey(session);
+    await validateSessionKey(session);
     await checkSmartAccountRateLimit(ip, session.smartAccountAddress, "chat:aa");
     await checkRelayerBalance();
 

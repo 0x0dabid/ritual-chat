@@ -86,9 +86,22 @@ Mock mode is not real on-chain execution. Production mode must not use fake tx h
 - Mock mode works.
 - Wallet connection is now used as the user identity layer.
 - Real AA smart account deployment is still adapter-gated.
+- `MockAAProviderAdapter` works.
+- `RealAAProviderAdapter` exists but requires provider/factory configuration.
 - Real `PersistentAgentFactory` integration is next.
 - Real Ritual LLM transaction flow comes after AA provider/factory selection.
 - The relayer does not own user agents.
+
+## AA Provider Status
+
+The AA provider layer lives under `lib/ritual/aa`.
+
+- `MockAAProviderAdapter` is the default when `MOCK_MODE=true`.
+- `RealAAProviderAdapter` exists for real mode, checks provider-specific environment variables, and returns clear errors when configuration is missing.
+- Real AA is still not considered complete until smart account deployment/loading is verified on Ritual Testnet.
+- The relayer must never be used as the user's smart account or Persistent Agent owner.
+
+See `docs/aa-provider-selection.md` for the current provider recommendation and remaining blockers.
 
 ## Real Ritual Mode
 

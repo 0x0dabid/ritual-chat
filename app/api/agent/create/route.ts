@@ -18,10 +18,6 @@ export async function POST(request: Request) {
     if (!walletAddress) throw new Error("Missing walletAddress.");
     if (!isAddress(walletAddress)) throw new Error("Invalid EVM wallet address.");
 
-    if (!MOCK_MODE) {
-      throw new Error("Real AA provider is not configured yet.");
-    }
-
     await checkWalletRateLimit(ip, walletAddress, "agent:wallet");
 
     const walletSession = await getSessionByWallet(walletAddress);
@@ -29,6 +25,10 @@ export async function POST(request: Request) {
     const existing = walletSession
       ?? (requestedSession?.userWallet.toLowerCase() === walletAddress.toLowerCase() ? requestedSession : null);
     const sessionId = existing?.id ?? requestedSessionId ?? crypto.randomUUID();
+
+    if (!MOCK_MODE && existing?.mockMode) {
+      throw new Error("Real AA provider is not configured yet.");
+    }
 
     if (existing?.status === "active") {
       return NextResponse.json({
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
     }
 
     const smartAccountAddress = await createOrLoadSmartAccount({
-      sessionId,
       userWallet: walletAddress,
       existing,
     }) as Address;
@@ -47,7 +46,10 @@ export async function POST(request: Request) {
       smartAccountAddress,
       existing,
     }) as Address;
-    const sessionKey = await createSessionKey(sessionId);
+    const sessionKey = await createSessionKey({
+      walletAddress,
+      smartAccountAddress,
+    });
 
     const now = new Date().toISOString();
     const session: AgentSession = {
