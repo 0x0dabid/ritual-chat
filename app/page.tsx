@@ -190,6 +190,11 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Session key authorization failed.");
+      console.info("Session authorization preflight", {
+        smartAccountAddress: data.smartAccountAddress,
+        smartAccountOwner: data.smartAccountOwner,
+        sessionKeyAddress: data.sessionKeyAddress,
+      });
       if (!data.requiresWalletSubmission || !data.txRequest) {
         const refreshed = await refreshSession();
         setNotice(refreshed?.sessionKeyStatus === "active"

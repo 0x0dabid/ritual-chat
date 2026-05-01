@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { isAddress } from "viem";
+import { isAddress, type Address } from "viem";
 import { MOCK_MODE } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit } from "@/lib/rateLimit";
-import { buildSetSessionKeyCall, getSmartAccountOwner } from "@/lib/ritual/aa/realAAProvider";
-import { getPublicClient } from "@/lib/ritual/chain";
-import { createOrLoadSmartAccount, createSessionKey } from "@/lib/ritual/smartAccount";
+import { prepareSessionAuthorization } from "@/lib/ritual/sessionAuthorization";
 
 export async function POST(request: Request) {
   try {
@@ -22,41 +20,18 @@ export async function POST(request: Request) {
       });
     }
 
-    const smartAccount = await createOrLoadSmartAccount({ userWallet: walletAddress });
-    const smartAccountCode = await getPublicClient().getCode({ address: smartAccount.smartAccountAddress });
-    if (!smartAccountCode || smartAccountCode === "0x") {
-      throw new Error("Smart account has no code on Ritual Testnet. Create the smart account before authorizing chat.");
-    }
-
-    const owner = await getSmartAccountOwner(smartAccount.smartAccountAddress);
-    if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
-      throw new Error("Connected wallet is not the owner of this smart account.");
-    }
-
-    const sessionKey = await createSessionKey({
-      walletAddress,
-      smartAccountAddress: smartAccount.smartAccountAddress,
+    const preflight = await prepareSessionAuthorization({
+      walletAddress: walletAddress as Address,
+      createIfMissing: true,
     });
-    if (!isAddress(sessionKey.sessionKeyAddress)) {
-      throw new Error("Session key address is invalid. Check RELAYER_PRIVATE_KEY.");
-    }
-
-    const expiresAtSeconds = BigInt(Math.floor(new Date(sessionKey.sessionKeyExpiresAt).getTime() / 1000));
-    if (expiresAtSeconds <= BigInt(Math.floor(Date.now() / 1000))) {
-      throw new Error("Session key expiry is not in the future. Check SESSION_KEY_TTL_HOURS.");
-    }
-
-    const data = buildSetSessionKeyCall(sessionKey.sessionKeyAddress, expiresAtSeconds);
 
     return NextResponse.json({
       requiresWalletSubmission: true,
-      txRequest: {
-        to: smartAccount.smartAccountAddress,
-        data,
-        value: "0",
-      },
-      sessionKeyAddress: sessionKey.sessionKeyAddress,
-      sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
+      txRequest: preflight.txRequest,
+      sessionKeyAddress: preflight.expectedSessionKeyAddress,
+      sessionKeyExpiresAt: preflight.sessionKeyExpiresAt,
+      smartAccountOwner: preflight.smartAccountOwner,
+      smartAccountAddress: preflight.smartAccountAddress,
       message: "Authorize the limited chat session key in your wallet.",
     });
   } catch (err) {
