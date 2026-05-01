@@ -11,7 +11,8 @@ export function ChatInput({ disabled, isSubmittingTx, onSend }: ChatInputProps) 
   const [prompt, setPrompt] = useState("");
   const [sending, setSending] = useState(false);
   const trimmed = prompt.trim();
-  const locked = disabled || sending || isSubmittingTx;
+  const submitting = sending || isSubmittingTx;
+  const locked = disabled || submitting;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -32,7 +33,7 @@ export function ChatInput({ disabled, isSubmittingTx, onSend }: ChatInputProps) 
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
           placeholder="Ask Ritual LLM anything..."
-          disabled={locked}
+          disabled={submitting}
           maxLength={1000}
           rows={2}
           className="max-h-32 min-h-12 flex-1 resize-none rounded-lg border border-ritual-green/20 bg-white/70 px-3 py-3 text-sm outline-none transition placeholder:text-black/38 focus:border-ritual-green"
