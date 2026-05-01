@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IRitualWallet {
-    function depositFor(address user, uint256 lockDuration) external payable;
-    function balanceOf(address account) external view returns (uint256);
-    function lockUntil(address account) external view returns (uint256);
+abstract contract PrecompileConsumer {
+    error PrecompileCallFailed(bytes result);
+
+    function _executePrecompile(address precompile, bytes memory input) internal returns (bytes memory output) {
+        (bool ok, bytes memory result) = precompile.call(input);
+        if (!ok) revert PrecompileCallFailed(result);
+        return result;
+    }
 }
 
-contract RitualChatManager {
+contract RitualChatManager is PrecompileConsumer {
     error InvalidAddress();
-    error InvalidLockDuration();
-    error MissingFunding();
+    error InvalidLlmConfig();
     error EmptyPrompt();
     error PromptTooLong();
-    error InsufficientLlmLock(uint256 requiredUntil, uint256 lockedUntil);
-    error LlmCallFailed(bytes result);
+    error LlmResponseError(string message);
 
     struct StorageRef {
         string platform;
@@ -24,83 +26,94 @@ contract RitualChatManager {
 
     address public immutable llmPrecompile;
     address public immutable executor;
-    IRitualWallet public immutable ritualWallet;
-    uint256 public immutable llmLockDuration;
-    string public constant MODEL = "zai-org/GLM-4.7-FP8";
-    uint256 public constant MAX_PROMPT_LENGTH = 1000;
-    uint256 public constant LLM_TTL_BLOCKS = 300;
+    uint256 public immutable ttl;
+    int256 public immutable temperature;
+    string public model;
+    StorageRef private _convoHistory;
 
-    event ChatMessageSubmitted(
+    uint256 public constant MAX_PROMPT_LENGTH = 1000;
+    int256 public constant MAX_COMPLETION_TOKENS = 4096;
+
+    event ChatPromptSubmitted(address indexed smartAccount, address indexed caller, string prompt);
+    event ChatResponseReceived(
         address indexed smartAccount,
-        address indexed caller,
-        string prompt,
-        bytes output
+        bytes completionData,
+        bytes modelMetadata,
+        StorageRef updatedConvoHistory
     );
-    event LlmWalletLockRefreshed(address indexed funder, uint256 amount, uint256 lockDuration);
 
     constructor(
         address llmPrecompile_,
         address executor_,
-        address ritualWallet_,
-        uint256 llmLockDuration_
+        string memory model_,
+        uint256 ttl_,
+        int256 temperature_,
+        StorageRef memory convoHistory_
     ) {
-        if (llmPrecompile_ == address(0) || executor_ == address(0) || ritualWallet_ == address(0)) {
-            revert InvalidAddress();
+        if (llmPrecompile_ == address(0) || executor_ == address(0)) revert InvalidAddress();
+        if (
+            ttl_ == 0
+                || bytes(model_).length == 0
+                || bytes(convoHistory_.platform).length == 0
+                || bytes(convoHistory_.path).length == 0
+                || bytes(convoHistory_.keyRef).length == 0
+        ) {
+            revert InvalidLlmConfig();
         }
-        if (llmLockDuration_ < LLM_TTL_BLOCKS) revert InvalidLockDuration();
+
         llmPrecompile = llmPrecompile_;
         executor = executor_;
-        ritualWallet = IRitualWallet(ritualWallet_);
-        llmLockDuration = llmLockDuration_;
+        model = model_;
+        ttl = ttl_;
+        temperature = temperature_;
+        _convoHistory = convoHistory_;
     }
 
-    receive() external payable {}
-
-    function refreshLlmWalletLock() external payable {
-        if (msg.value == 0) revert MissingFunding();
-
-        ritualWallet.depositFor{value: msg.value}(address(this), llmLockDuration);
-        emit LlmWalletLockRefreshed(msg.sender, msg.value, llmLockDuration);
+    function convoHistory() external view returns (StorageRef memory) {
+        return _convoHistory;
     }
 
-    function llmWalletStatus() external view returns (uint256 balance, uint256 lockedUntil) {
-        balance = ritualWallet.balanceOf(address(this));
-        lockedUntil = ritualWallet.lockUntil(address(this));
-    }
-
-    function sendChatMessage(string calldata prompt) external returns (bytes memory output) {
+    function sendChatMessage(string calldata prompt) external returns (bytes memory completionData) {
         bytes memory promptBytes = bytes(prompt);
         if (promptBytes.length == 0) revert EmptyPrompt();
         if (promptBytes.length > MAX_PROMPT_LENGTH) revert PromptTooLong();
 
-        uint256 requiredUntil = block.number + LLM_TTL_BLOCKS;
-        uint256 lockedUntil = ritualWallet.lockUntil(address(this));
-        if (lockedUntil < requiredUntil) revert InsufficientLlmLock(requiredUntil, lockedUntil);
+        emit ChatPromptSubmitted(msg.sender, msg.sender, prompt);
 
-        bytes memory input = _buildLlmInput(prompt);
-        (bool ok, bytes memory result) = llmPrecompile.call(input);
-        if (!ok) revert LlmCallFailed(result);
+        bytes memory result = _executePrecompile(llmPrecompile, _buildLlmInput(prompt));
+        (
+            bool hasError,
+            bytes memory responseCompletionData,
+            bytes memory modelMetadata,
+            string memory errorMessage,
+            StorageRef memory updatedConvoHistory
+        ) = abi.decode(result, (bool, bytes, bytes, string, StorageRef));
 
-        emit ChatMessageSubmitted(msg.sender, msg.sender, prompt, result);
-        return result;
+        if (hasError) revert LlmResponseError(errorMessage);
+
+        emit ChatResponseReceived(msg.sender, responseCompletionData, modelMetadata, updatedConvoHistory);
+        return responseCompletionData;
+    }
+
+    function previewLlmInput(string calldata prompt) external view returns (bytes memory) {
+        return _buildLlmInput(prompt);
     }
 
     function _buildLlmInput(string calldata prompt) internal view returns (bytes memory) {
         bytes[] memory emptyBytesArray = new bytes[](0);
-        StorageRef memory emptyConvoHistory = StorageRef("", "", "");
 
         return abi.encode(
             executor,
             emptyBytesArray,
-            LLM_TTL_BLOCKS,
+            ttl,
             emptyBytesArray,
             bytes(""),
             _messagesJson(prompt),
-            MODEL,
+            model,
             int256(0),
             "",
             false,
-            int256(4096),
+            MAX_COMPLETION_TOKENS,
             "",
             "",
             uint256(1),
@@ -112,14 +125,14 @@ contract RitualChatManager {
             "auto",
             "",
             false,
-            int256(700),
+            temperature,
             bytes(""),
             bytes(""),
             int256(-1),
             int256(1000),
             "",
             false,
-            emptyConvoHistory
+            _convoHistory
         );
     }
 

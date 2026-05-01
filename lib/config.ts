@@ -85,13 +85,14 @@ export const RITUAL_LLM_PRECOMPILE_ADDRESS = normalizePrecompileAddress(
 );
 export const CHAT_MANAGER_ADDRESS = process.env.CHAT_MANAGER_ADDRESS as Address | undefined;
 export const RITUAL_LLM_EXECUTOR_ADDRESS = process.env.RITUAL_LLM_EXECUTOR_ADDRESS as Address | undefined;
-export const RITUAL_WALLET_ADDRESS = (
-  process.env.RITUAL_WALLET_ADDRESS ?? "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948"
-) as Address;
-export const RITUAL_LLM_LOCK_DURATION = Number(process.env.RITUAL_LLM_LOCK_DURATION ?? "10000");
 
 export const TEE_SERVICE_REGISTRY_ADDRESS = "0x9644e8562cE0Fe12b4deeC4163c064A8862Bf47F" as Address;
-export const RITUAL_LIVE_TEXT_MODEL = "zai-org/GLM-4.7-FP8";
+export const RITUAL_LIVE_TEXT_MODEL = process.env.RITUAL_LLM_MODEL ?? "zai-org/GLM-4.7-FP8";
+export const RITUAL_LLM_TTL = Number(process.env.RITUAL_LLM_TTL ?? "30");
+export const RITUAL_LLM_TEMPERATURE = Number(process.env.RITUAL_LLM_TEMPERATURE ?? "700");
+export const RITUAL_LLM_CONVO_HISTORY_PROVIDER = process.env.RITUAL_LLM_CONVO_HISTORY_PROVIDER;
+export const RITUAL_LLM_CONVO_HISTORY_PATH = process.env.RITUAL_LLM_CONVO_HISTORY_PATH;
+export const RITUAL_LLM_CONVO_HISTORY_KEY_REF = process.env.RITUAL_LLM_CONVO_HISTORY_KEY_REF;
 
 export function txExplorerLink(txHash: string) {
   return `${RITUAL_EXPLORER_URL}/tx/${txHash}`;

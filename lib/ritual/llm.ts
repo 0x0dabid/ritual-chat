@@ -8,7 +8,17 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { CHAT_MANAGER_ADDRESS, MAX_PROMPT_LENGTH, MOCK_MODE, RITUAL_LIVE_TEXT_MODEL } from "@/lib/config";
+import {
+  CHAT_MANAGER_ADDRESS,
+  MAX_PROMPT_LENGTH,
+  MOCK_MODE,
+  RITUAL_LIVE_TEXT_MODEL,
+  RITUAL_LLM_CONVO_HISTORY_KEY_REF,
+  RITUAL_LLM_CONVO_HISTORY_PATH,
+  RITUAL_LLM_CONVO_HISTORY_PROVIDER,
+  RITUAL_LLM_TEMPERATURE,
+  RITUAL_LLM_TTL,
+} from "@/lib/config";
 import { mockAssistantResponse } from "@/lib/mock";
 
 export const ritualChatManagerAbi = parseAbi([
@@ -81,9 +91,16 @@ export function buildSmartAccountChatCall(params: {
 export function buildLlmCallData(params: {
   executor: Address;
   prompt: string;
-  convoPath: string;
-  convoKeyRef: string;
+  convoPath?: string;
+  convoKeyRef?: string;
 }) {
+  const convoHistoryProvider = RITUAL_LLM_CONVO_HISTORY_PROVIDER;
+  const convoHistoryPath = params.convoPath ?? RITUAL_LLM_CONVO_HISTORY_PATH;
+  const convoHistoryKeyRef = params.convoKeyRef ?? RITUAL_LLM_CONVO_HISTORY_KEY_REF;
+  if (!convoHistoryProvider || !convoHistoryPath || !convoHistoryKeyRef) {
+    throw new Error("Ritual LLM convoHistory config is missing.");
+  }
+
   // Confirmed from latest ritual-dapp-skills on 2026-05-01:
   // LLM precompile 0x0802 accepts this 30-field ABI payload and current live
   // text model should be pinned to zai-org/GLM-4.7-FP8.
@@ -98,7 +115,7 @@ export function buildLlmCallData(params: {
     [
       params.executor,
       [],
-      300n,
+      BigInt(RITUAL_LLM_TTL),
       [],
       "0x",
       JSON.stringify([{ role: "user", content: params.prompt }]),
@@ -118,14 +135,14 @@ export function buildLlmCallData(params: {
       "auto",
       "",
       false,
-      700n,
+      BigInt(RITUAL_LLM_TEMPERATURE),
       "0x",
       "0x",
       -1n,
       1000n,
       "",
       false,
-      ["gcs", params.convoPath, params.convoKeyRef],
+      [convoHistoryProvider, convoHistoryPath, convoHistoryKeyRef],
     ],
   );
 }

@@ -71,8 +71,12 @@ PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
 PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000820
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 RITUAL_LLM_EXECUTOR_ADDRESS=
-RITUAL_LLM_LOCK_DURATION=10000
-RITUAL_LLM_WALLET_FUNDING_WEI=
+RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
+RITUAL_LLM_TTL=30
+RITUAL_LLM_TEMPERATURE=700
+RITUAL_LLM_CONVO_HISTORY_PROVIDER=
+RITUAL_LLM_CONVO_HISTORY_PATH=
+RITUAL_LLM_CONVO_HISTORY_KEY_REF=
 CHAT_MANAGER_ADDRESS=
 
 DATABASE_URL=
@@ -220,8 +224,12 @@ DEPLOYER_PRIVATE_KEY=0x...
 AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 RITUAL_LLM_EXECUTOR_ADDRESS=0x...
-RITUAL_LLM_LOCK_DURATION=10000
-RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
+RITUAL_LLM_TTL=30
+RITUAL_LLM_TEMPERATURE=700
+RITUAL_LLM_CONVO_HISTORY_PROVIDER=gcs
+RITUAL_LLM_CONVO_HISTORY_PATH=ritual-chat/conversations/session.jsonl
+RITUAL_LLM_CONVO_HISTORY_KEY_REF=GCS_CREDS
 npm run contracts:deploy:chat
 ```
 
@@ -239,13 +247,17 @@ CHAT_MANAGER_ADDRESS=0x...
 
 The script also allowlists `CHAT_MANAGER_ADDRESS` on `RitualChatSmartAccountFactory` when `AA_FACTORY_ADDRESS` is configured and the deployer owns the factory. Do not allowlist arbitrary targets.
 
-`RitualChatManager` calls the async LLM precompile, so the manager address must have a live RitualWallet R-lock. The deploy script calls `refreshLlmWalletLock()` when `RITUAL_LLM_WALLET_FUNDING_WEI` is set. If you deploy without funding, fund and lock the manager before public chat submissions:
+`RitualChatManager` follows the short-running async consumer pattern for LLM precompile `0x0802`: it builds the documented 30-field payload, calls the precompile through `_executePrecompile`, decodes the response envelope, and emits prompt/response events in the fulfilled replay path. It does not use the long-running two-phase callback format.
+
+The LLM payload requires `convoHistory` as a real `StorageRef`:
 
 ```bash
-RITUAL_LLM_LOCK_DURATION=10000
-RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
-npm run contracts:deploy:chat
+RITUAL_LLM_CONVO_HISTORY_PROVIDER=gcs
+RITUAL_LLM_CONVO_HISTORY_PATH=ritual-chat/conversations/session.jsonl
+RITUAL_LLM_CONVO_HISTORY_KEY_REF=GCS_CREDS
 ```
+
+`RITUAL_LLM_CONVO_HISTORY_KEY_REF` is a reference name. The corresponding DA credential must be available to the selected executor using Ritual's documented secret flow. Do not use placeholder DA values in production.
 
 Until real session-key sponsorship is wired, the connected wallet submits the smart-account chat transaction. The UI shows `Response pending on Ritual Testnet.` with the real transaction hash and then tracks confirmation.
 
@@ -287,17 +299,19 @@ Error:
 insufficient lock duration, locked until 0
 ```
 
-Cause: Ritual LLM precompile `0x0802` is async and requires the caller to have a non-zero RitualWallet lock that lasts beyond the request TTL. In this app, `RitualChatManager` is the contract that calls the precompile, so the manager must be funded and locked in `RitualWallet`.
+Cause: Ritual LLM precompile `0x0802` is short-running async. The transaction must follow Ritual's async precompile path and include the correct 30-field LLM payload with a non-zero `ttl`. Older versions of this app attempted a manager-level manual lock path, but public v1 now uses the documented `_executePrecompile` consumer pattern instead.
 
-Fix: set a positive lock duration and redeploy or refresh the ChatManager lock:
+Fix: redeploy `RitualChatManager` with the current deploy script and a complete LLM config:
 
 ```bash
-RITUAL_LLM_LOCK_DURATION=10000
-RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+RITUAL_LLM_TTL=30
+RITUAL_LLM_CONVO_HISTORY_PROVIDER=gcs
+RITUAL_LLM_CONVO_HISTORY_PATH=ritual-chat/conversations/session.jsonl
+RITUAL_LLM_CONVO_HISTORY_KEY_REF=GCS_CREDS
 npm run contracts:deploy:chat
 ```
 
-If `CHAT_MANAGER_ADDRESS` is already deployed, call `refreshLlmWalletLock()` on that manager with testnet RITUAL value. Use a fresh deployer wallet with only testnet funds.
+If the chain still reports a lock error after redeploying, check the submitting wallet or smart account against RitualWallet requirements from the latest Ritual docs; do not add arbitrary lock fields to the LLM payload.
 
 ### Wallet nonce / replacement transaction errors
 
