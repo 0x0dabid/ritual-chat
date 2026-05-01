@@ -22,10 +22,12 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loadingStep, setLoadingStep] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean | null>(null);
 
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE !== "false", [agent]);
   const walletAddress = isConnected && address ? address : null;
+  const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -76,6 +78,7 @@ export default function Home() {
 
   async function connectWallet() {
     setError(null);
+    setNotice(null);
     try {
       if (hasInjectedWallet === false) {
         throw new Error("No injected wallet detected. Please install MetaMask or open in a browser with an EVM wallet.");
@@ -98,6 +101,7 @@ export default function Home() {
     }
 
     setError(null);
+    setNotice(null);
     setLoadingStep("Creating Ritual Smart Account...");
     try {
       const response = await fetch("/api/agent/create", {
@@ -113,11 +117,18 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Agent creation failed");
 
-      setLoadingStep("Activating chat session...");
       window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.id);
       setSessionId(data.session.id);
       setAgent(data.session);
       setMessages(data.messages ?? []);
+
+      if (!data.session.mockMode && data.session.status !== "active") {
+        setLoadingStep(null);
+        setNotice(data.message ?? "Smart Account loaded successfully. Persistent Agent integration is pending.");
+        return;
+      }
+
+      setLoadingStep("Activating chat session...");
       setLoadingStep("Ready to chat.");
       window.setTimeout(() => setLoadingStep(null), 900);
     } catch (err) {
@@ -181,10 +192,16 @@ export default function Home() {
             {error}
           </div>
         ) : null}
+        {notice ? (
+          <div className="rounded-lg border border-ritual-green/25 bg-ritual-card px-4 py-3 text-sm text-ritual-green">
+            {notice}
+          </div>
+        ) : null}
         <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <div className="flex flex-col gap-6">
             <AgentSetupCard
               active={agent?.status === "active"}
+              realModePending={realModePending}
               loadingStep={loadingStep}
               walletAddress={walletAddress}
               walletPending={walletPending}
@@ -193,6 +210,14 @@ export default function Home() {
               onDisconnectWallet={() => disconnect()}
               onCreate={createAgent}
             />
+            {realModePending ? (
+              <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
+                <h2 className="text-lg font-semibold">Next step: Persistent Agent integration</h2>
+                <p className="mt-2 text-sm leading-6 text-black/68">
+                  Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual&apos;s PersistentAgentFactory so it can own a real Persistent Agent.
+                </p>
+              </section>
+            ) : null}
             {agent ? <AgentStatusCard session={agent} /> : null}
           </div>
           <ChatWindow

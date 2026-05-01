@@ -7,6 +7,29 @@ import { createOrLoadSmartAccount, createSessionKey } from "@/lib/ritual/smartAc
 import { getSession, getSessionByWallet, getSessionMessages, upsertSession } from "@/lib/storage";
 import type { AgentSession } from "@/lib/types";
 
+const pendingRealModeMessage = "Smart Account already active. Persistent Agent integration is pending.";
+
+function isRealSmartAccountPending(session: AgentSession | null | undefined) {
+  return Boolean(session && !session.mockMode && session.smartAccountAddress);
+}
+
+async function realPendingResponse(session: AgentSession) {
+  return NextResponse.json({
+    smartAccountAddress: session.smartAccountAddress,
+    smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
+    persistentAgentAddress: session.persistentAgentAddress,
+    sessionKeyAddress: session.sessionKeyAddress,
+    status: session.status,
+    smartAccountStatus: "active",
+    persistentAgentStatus: "pending",
+    sessionKeyStatus: "pending",
+    message: pendingRealModeMessage,
+    explorerLink: session.explorerLink,
+    session,
+    messages: await getSessionMessages(session.id),
+  });
+}
+
 export async function POST(request: Request) {
   try {
     const ip = getRequestIp(request);
@@ -35,6 +58,10 @@ export async function POST(request: Request) {
         session: existing,
         messages: await getSessionMessages(existing.id),
       });
+    }
+
+    if (!MOCK_MODE && isRealSmartAccountPending(existing)) {
+      return realPendingResponse(existing as AgentSession);
     }
 
     const smartAccount = await createOrLoadSmartAccount({
@@ -78,6 +105,23 @@ export async function POST(request: Request) {
     };
 
     await upsertSession(session);
+
+    if (!MOCK_MODE) {
+      return NextResponse.json({
+        smartAccountAddress: session.smartAccountAddress,
+        smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
+        persistentAgentAddress: session.persistentAgentAddress,
+        sessionKeyAddress: session.sessionKeyAddress,
+        status: session.status,
+        smartAccountStatus: "active",
+        persistentAgentStatus: "pending",
+        sessionKeyStatus: "pending",
+        message: "Smart Account loaded successfully. Persistent Agent integration is pending.",
+        explorerLink: session.explorerLink,
+        session,
+        messages: await getSessionMessages(session.id),
+      });
+    }
 
     return NextResponse.json({
       smartAccountAddress: session.smartAccountAddress,

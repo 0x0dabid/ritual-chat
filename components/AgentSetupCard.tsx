@@ -2,6 +2,7 @@ import { CheckCircle2, Loader2, Wallet } from "lucide-react";
 
 interface AgentSetupCardProps {
   active: boolean;
+  realModePending: boolean;
   loadingStep: string | null;
   walletAddress: string | null;
   walletPending: boolean;
@@ -17,6 +18,7 @@ function compact(address: string) {
 
 export function AgentSetupCard({
   active,
+  realModePending,
   loadingStep,
   walletAddress,
   walletPending,
@@ -26,6 +28,11 @@ export function AgentSetupCard({
   onCreate,
 }: AgentSetupCardProps) {
   const hasWallet = Boolean(walletAddress);
+  const createButtonLabel = realModePending
+    ? "Smart Account Created"
+    : active
+      ? "Ready to chat."
+      : "Create My Agent";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -63,12 +70,17 @@ export function AgentSetupCard({
       <button
         type="button"
         onClick={onCreate}
-        disabled={Boolean(loadingStep) || active || !hasWallet}
+        disabled={Boolean(loadingStep) || active || realModePending || !hasWallet}
         className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
       >
         {loadingStep ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : null}
-        {active ? "Ready to chat." : "Create My Agent"}
+        {createButtonLabel}
       </button>
+      {realModePending ? (
+        <p className="mt-3 text-sm leading-6 text-black/68">
+          Your Ritual Smart Account is active. Persistent Agent creation is the next integration step.
+        </p>
+      ) : null}
       {loadingStep ? (
         <p className="mt-3 text-sm text-ritual-green">{loadingStep}</p>
       ) : null}
