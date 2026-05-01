@@ -32,6 +32,13 @@ export const ritualChatSmartAccountFactoryAbi = parseAbi([
 ]);
 
 export const ritualChatSmartAccountAbi = parseAbi([
+  "error AlreadyInitialized()",
+  "error InvalidAddress()",
+  "error NotOwner()",
+  "error NotFactory()",
+  "error NotAuthorizedForChat()",
+  "error TargetNotAllowed()",
+  "error CallFailed(bytes result)",
   "function owner() view returns (address)",
   "function sessionKey() view returns (address)",
   "function sessionKeyExpiresAt() view returns (uint256)",

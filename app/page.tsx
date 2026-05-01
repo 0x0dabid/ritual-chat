@@ -211,7 +211,6 @@ export default function Home() {
         to: data.txRequest.to as `0x${string}`,
         data: data.txRequest.data as `0x${string}`,
         value: BigInt(data.txRequest.value ?? "0"),
-        gas: 250_000n,
       });
       const txStatus = await pollTx(txHash);
       if (txStatus === "failed") {

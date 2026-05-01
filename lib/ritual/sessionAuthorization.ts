@@ -52,6 +52,10 @@ export async function prepareSessionAuthorization(params: {
   if (!isOwner) {
     throw new Error("Connected wallet is not the owner of this smart account.");
   }
+  const ownerBalance = await publicClient.getBalance({ address: params.walletAddress });
+  if (ownerBalance === 0n) {
+    throw new Error("Connected wallet needs Ritual testnet gas to authorize the session.");
+  }
 
   const sessionExecutor = getSessionExecutorAccount();
   if (!isAddress(sessionExecutor.address)) {
@@ -67,6 +71,13 @@ export async function prepareSessionAuthorization(params: {
   const data = buildSetSessionKeyCall(sessionExecutor.address, expiresAtSeconds);
   try {
     await publicClient.simulateContract({
+      address: smartAccountAddress,
+      abi: ritualChatSmartAccountAbi,
+      functionName: "setSessionKey",
+      args: [sessionExecutor.address, expiresAtSeconds],
+      account: params.walletAddress,
+    });
+    await publicClient.estimateContractGas({
       address: smartAccountAddress,
       abi: ritualChatSmartAccountAbi,
       functionName: "setSessionKey",
@@ -145,8 +156,19 @@ export async function inspectSessionAuthorization(walletAddress: Address): Promi
     } else if (expiresAtSeconds <= BigInt(Math.floor(Date.now() / 1000))) {
       simulationError = "Invalid session key or expiry.";
     } else {
+      const ownerBalance = await publicClient.getBalance({ address: walletAddress });
+      if (ownerBalance === 0n) {
+        simulationError = "Connected wallet needs Ritual testnet gas to authorize the session.";
+      } else {
       try {
         await publicClient.simulateContract({
+          address: smartAccountAddress,
+          abi: ritualChatSmartAccountAbi,
+          functionName: "setSessionKey",
+          args: [expectedSessionKeyAddress, expiresAtSeconds],
+          account: walletAddress,
+        });
+        await publicClient.estimateContractGas({
           address: smartAccountAddress,
           abi: ritualChatSmartAccountAbi,
           functionName: "setSessionKey",
@@ -156,6 +178,7 @@ export async function inspectSessionAuthorization(walletAddress: Address): Promi
         canSimulateSetSessionKey = true;
       } catch (err) {
         simulationError = mapSessionAuthorizationSimulationError(err);
+      }
       }
     }
 
@@ -190,6 +213,12 @@ function mapSessionAuthorizationSimulationError(err: unknown) {
   }
   if (text.includes("InvalidAddress") || lower.includes("invalidaddress")) {
     return "Invalid session key or expiry.";
+  }
+  if (lower.includes("insufficient funds") || lower.includes("insufficient balance")) {
+    return "Connected wallet needs Ritual testnet gas to authorize the session.";
+  }
+  if (lower.includes("gas required exceeds allowance") || lower.includes("out of gas")) {
+    return "Session authorization needs more gas. Let MetaMask estimate gas and try again.";
   }
   return "Session authorization would revert. Check owner, network, session key, and expiry.";
 }
