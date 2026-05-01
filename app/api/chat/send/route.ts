@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
-import { RITUAL_LLM_PRECOMPILE_ADDRESS } from "@/lib/config";
+import { MOCK_MODE, RITUAL_LLM_PRECOMPILE_ADDRESS } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkSmartAccountRateLimit } from "@/lib/rateLimit";
 import { buildLlmCallData, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
 import { checkRelayerBalance, submitRelayedTransaction } from "@/lib/ritual/relayer";
+import { getOnchainSmartAccountSession } from "@/lib/ritual/realSession";
 import { validateSessionKey } from "@/lib/ritual/smartAccount";
 import { addChatMessage, getSession } from "@/lib/storage";
 import type { ChatMessage } from "@/lib/types";
@@ -16,10 +17,11 @@ export async function POST(request: Request) {
     const body = await request.json();
     const sessionId = String(body.sessionId ?? "");
     const prompt = validatePrompt(String(body.prompt ?? ""));
-    const session = await getSession(sessionId);
+    const session = await getSession(sessionId)
+      ?? (!MOCK_MODE && isAddress(sessionId) ? await getOnchainSmartAccountSession(sessionId as Address) : null);
 
     if (!session) throw new Error("Create your Persistent Ritual Agent before chatting.");
-    if (session.status !== "active") throw new Error("Agent creation failed. Please try again.");
+    if (session.status !== "active") throw new Error("Chat is disabled until the Persistent Agent is active.");
     if (!isAddress(session.userWallet)) throw new Error("Connect your wallet before chatting.");
     await validateSessionKey(session);
     await checkSmartAccountRateLimit(ip, session.smartAccountAddress, "chat:aa");

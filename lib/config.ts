@@ -15,7 +15,27 @@ export const MAX_REQUESTS_PER_IP_PER_DAY = 50;
 export const RITUAL_RPC_URL = process.env.RITUAL_RPC_URL;
 export const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
 export const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
-export const USE_FILE_STORAGE = MOCK_MODE || (!IS_VERCEL && process.env.USE_FILE_STORAGE === "true");
+export type StorageDriver = "local-file" | "memory" | "database";
+
+function resolveStorageDriver(): StorageDriver {
+  const requested = process.env.STORAGE_DRIVER as StorageDriver | undefined;
+  const driver = requested ?? (MOCK_MODE ? "local-file" : "memory");
+
+  if (IS_VERCEL && driver === "local-file") {
+    return "memory";
+  }
+
+  if (driver === "local-file" || driver === "memory" || driver === "database") {
+    return driver;
+  }
+
+  return MOCK_MODE ? "local-file" : "memory";
+}
+
+export const STORAGE_DRIVER = resolveStorageDriver();
+export const USE_FILE_STORAGE = STORAGE_DRIVER === "local-file";
+export const USE_MEMORY_STORAGE = STORAGE_DRIVER === "memory";
+export const USE_DATABASE_STORAGE = STORAGE_DRIVER === "database";
 
 export const AA_PROVIDER_KIND = process.env.AA_PROVIDER ?? process.env.AA_PROVIDER_KIND ?? "custom";
 export const AA_FACTORY_ADDRESS = (

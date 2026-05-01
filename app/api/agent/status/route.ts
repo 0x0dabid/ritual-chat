@@ -16,8 +16,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Invalid EVM wallet address." }, { status: 400 });
   }
 
-  if (!MOCK_MODE && walletAddress) {
-    const session = await getOnchainSmartAccountSession(walletAddress as Address);
+  const realModeWalletIdentity = walletAddress ?? (sessionId && isAddress(sessionId) ? sessionId : null);
+
+  if (!MOCK_MODE && realModeWalletIdentity) {
+    const session = await getOnchainSmartAccountSession(realModeWalletIdentity as Address);
     if (!session) {
       return NextResponse.json({ error: "Smart account not created yet." }, { status: 404 });
     }

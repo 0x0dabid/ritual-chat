@@ -61,6 +61,7 @@ PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000820
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 
 DATABASE_URL=
+STORAGE_DRIVER=memory
 MOCK_MODE=false
 ```
 
@@ -82,6 +83,7 @@ For local UI-only testing, explicitly set:
 ```bash
 MOCK_MODE=true
 NEXT_PUBLIC_MOCK_MODE=true
+STORAGE_DRIVER=local-file
 ```
 
 `MOCK_MODE=true` is available for local UI testing only. It creates fake local smart account addresses, fake Persistent Agent addresses, mock text responses, and fake tx hashes. The UI labels mock mode clearly.
@@ -278,13 +280,27 @@ For Vercel, run the app with:
 MOCK_MODE=false
 NEXT_PUBLIC_MOCK_MODE=false
 AA_PROVIDER=custom
-AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
+STORAGE_DRIVER=memory
+NEXT_PUBLIC_RITUAL_CHAIN_ID=1979
+NEXT_PUBLIC_RITUAL_EXPLORER_URL=https://explorer.ritualfoundation.org
+NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
+PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
+PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0820
 ```
 
 In real mode, RITUAL CHAT does not use file-based session storage on Vercel. The connected `walletAddress` is the session identity, and the deterministic smart account is derived from the onchain `RitualChatSmartAccountFactory`. Smart Account status is determined by checking code at the predicted smart account address.
 
 File-backed JSON storage remains for mock/local testing only and is disabled on Vercel real mode. A database should be added later for chat history and durable session records, not as the source of truth for smart account ownership.
+
+Storage drivers:
+
+- `STORAGE_DRIVER=memory`: ephemeral request/runtime cache, suitable for Vercel real-mode account lookup because onchain state remains the source of truth.
+- `STORAGE_DRIVER=local-file`: local development only. Vercel automatically refuses this path.
+- `STORAGE_DRIVER=database`: reserved for future persistent chat history/session records. Until a database adapter is implemented, production features that need persistence return `Database storage is required for this production feature.`
+
+Never set `NEXT_PUBLIC_RELAYER_PRIVATE_KEY`. If backend transaction submission is enabled later, `RELAYER_PRIVATE_KEY` must stay server-side only.
 
 ## Transaction Links
 
