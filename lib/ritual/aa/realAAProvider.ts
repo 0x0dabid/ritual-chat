@@ -32,6 +32,7 @@ export const ritualChatSmartAccountFactoryAbi = parseAbi([
 ]);
 
 export const ritualChatSmartAccountAbi = parseAbi([
+  "function owner() view returns (address)",
   "function sessionKey() view returns (address)",
   "function sessionKeyExpiresAt() view returns (uint256)",
   "function setSessionKey(address sessionKey, uint256 expiresAt)",
@@ -235,6 +236,14 @@ export function buildSetSessionKeyCall(sessionKeyAddress: Address, expiresAt: bi
     abi: ritualChatSmartAccountAbi,
     functionName: "setSessionKey",
     args: [sessionKeyAddress, expiresAt],
+  });
+}
+
+export async function getSmartAccountOwner(smartAccountAddress: Address) {
+  return getPublicClient().readContract({
+    address: smartAccountAddress,
+    abi: ritualChatSmartAccountAbi,
+    functionName: "owner",
   });
 }
 

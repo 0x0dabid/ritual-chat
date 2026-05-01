@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { parseEther } from "viem";
-import { useAccount, useConnect, useDisconnect, useWalletClient } from "wagmi";
+import { useAccount, useChainId, useConnect, useDisconnect, useWalletClient } from "wagmi";
 import { AgentSetupCard } from "@/components/AgentSetupCard";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { ChatWindow } from "@/components/ChatWindow";
@@ -11,6 +11,7 @@ import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { TestnetNotice } from "@/components/TestnetNotice";
 import type { AgentSession, ChatMessage } from "@/lib/types";
+import { ritualTestnet } from "@/lib/wagmi";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
 
@@ -18,6 +19,7 @@ export default function Home() {
   const { address, isConnected } = useAccount();
   const { connectAsync, connectors, isPending: walletPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [agent, setAgent] = useState<AgentSession | null>(null);
@@ -188,6 +190,17 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Session key authorization failed.");
+      if (!data.requiresWalletSubmission || !data.txRequest) {
+        const refreshed = await refreshSession();
+        setNotice(refreshed?.sessionKeyStatus === "active"
+          ? "Chat session authorized. You can now send messages without wallet popups."
+          : data.message ?? "Session key authorization is pending.");
+        setLoadingStep(null);
+        return;
+      }
+      if (chainId !== ritualTestnet.id) {
+        throw new Error("Wrong network. Switch MetaMask to Ritual Testnet before authorizing chat.");
+      }
 
       const txHash = await walletClient.sendTransaction({
         to: data.txRequest.to as `0x${string}`,
@@ -197,7 +210,7 @@ export default function Home() {
       });
       const txStatus = await pollTx(txHash);
       if (txStatus === "failed") {
-        throw new Error("Session authorization failed on-chain. Please check wallet gas/funds and try again.");
+        throw new Error("Session authorization failed on-chain.");
       }
       if (txStatus === "pending") {
         throw new Error("Session authorization is still pending on Ritual Testnet. Please wait and refresh.");
@@ -232,6 +245,10 @@ export default function Home() {
       return;
     }
     if (isFundingSmartAccount) return;
+    if (chainId !== ritualTestnet.id) {
+      setError("Wrong network. Switch MetaMask to Ritual Testnet before funding your Smart Account.");
+      return;
+    }
 
     setError(null);
     setNotice(null);
