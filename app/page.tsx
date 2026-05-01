@@ -173,7 +173,7 @@ export default function Home() {
         <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <div className="flex flex-col gap-6">
             <AgentSetupCard
-              active={Boolean(agent)}
+              active={agent?.status === "active"}
               loadingStep={loadingStep}
               walletAddress={walletAddress}
               walletPending={walletPending}
@@ -184,7 +184,7 @@ export default function Home() {
             {agent ? <AgentStatusCard session={agent} /> : null}
           </div>
           <ChatWindow
-            disabled={!agent}
+            disabled={!agent || agent.status !== "active"}
             messages={messages}
             onSend={sendMessage}
           />

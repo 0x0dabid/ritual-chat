@@ -5,6 +5,11 @@ export interface SessionKeyResult {
   sessionKeyExpiresAt: string;
 }
 
+export interface SmartAccountResult {
+  smartAccountAddress: Address;
+  deploymentTxHash?: Hex;
+}
+
 export interface UserOperationOrTxRequest {
   walletAddress: Address;
   smartAccountAddress: Address;
@@ -25,7 +30,7 @@ export interface UserOperationOrTx {
 export interface AAProviderAdapter {
   getProviderName(): string;
   isConfigured(): boolean;
-  createOrLoadSmartAccount(walletAddress: Address): Promise<Address>;
+  createOrLoadSmartAccount(walletAddress: Address): Promise<SmartAccountResult>;
   getSmartAccountAddress(walletAddress: Address): Promise<Address>;
   createSessionKey(walletAddress: Address, smartAccountAddress: Address): Promise<SessionKeyResult>;
   validateSessionKey(sessionKeyAddress: Address): Promise<boolean>;

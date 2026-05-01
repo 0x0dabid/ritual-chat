@@ -1,4 +1,5 @@
-import { isAddress, type Address } from "viem";
+import { createWalletClient, http, isAddress, parseAbi, type Address } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import {
   AA_BUNDLER_RPC_URL,
   AA_ENTRYPOINT_ADDRESS,
@@ -6,17 +7,28 @@ import {
   AA_PAYMASTER_RPC_URL,
   AA_PROVIDER_KIND,
   AA_SESSION_KEY_MODULE_ADDRESS,
+  DEPLOYER_PRIVATE_KEY,
+  RELAYER_PRIVATE_KEY,
+  RITUAL_RPC_URL,
   SESSION_KEY_TTL_DAYS,
 } from "@/lib/config";
+import { getPublicClient, ritualChain } from "@/lib/ritual/chain";
 import { addDays } from "@/lib/time";
 import type {
   AAProviderAdapter,
   SessionKeyResult,
+  SmartAccountResult,
   UserOperationOrTx,
   UserOperationOrTxRequest,
 } from "@/lib/ritual/aa/types";
 
 const NOT_READY = "Real AA provider is not configured yet.";
+
+export const ritualChatSmartAccountFactoryAbi = parseAbi([
+  "function getAccountAddress(address owner) view returns (address)",
+  "function createAccount(address owner) returns (address account)",
+  "event AccountCreated(address indexed owner, address indexed account)",
+]);
 
 export class RealAAProviderAdapter implements AAProviderAdapter {
   getProviderName() {
@@ -24,7 +36,7 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
   }
 
   isConfigured() {
-    if (AA_PROVIDER_KIND === "custom-factory") {
+    if (AA_PROVIDER_KIND === "custom" || AA_PROVIDER_KIND === "custom-factory") {
       return Boolean(AA_FACTORY_ADDRESS && isAddress(AA_FACTORY_ADDRESS));
     }
 
@@ -45,20 +57,66 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
     return false;
   }
 
-  async createOrLoadSmartAccount(walletAddress: Address) {
+  async createOrLoadSmartAccount(walletAddress: Address): Promise<SmartAccountResult> {
     this.assertConfigured();
-    return this.getSmartAccountAddress(walletAddress);
+    const smartAccountAddress = await this.getSmartAccountAddress(walletAddress);
+    const code = await getPublicClient().getCode({ address: smartAccountAddress });
+
+    if (code && code !== "0x") {
+      return { smartAccountAddress };
+    }
+
+    const signerPrivateKey = DEPLOYER_PRIVATE_KEY ?? RELAYER_PRIVATE_KEY;
+    if (!signerPrivateKey) {
+      throw new Error("Real AA provider is not configured yet. Missing: DEPLOYER_PRIVATE_KEY or RELAYER_PRIVATE_KEY.");
+    }
+    if (!RITUAL_RPC_URL) {
+      throw new Error("Real AA provider is not configured yet. Missing: RITUAL_RPC_URL.");
+    }
+
+    const account = privateKeyToAccount(signerPrivateKey);
+    const walletClient = createWalletClient({
+      account,
+      chain: ritualChain,
+      transport: http(RITUAL_RPC_URL),
+    });
+
+    const deploymentTxHash = await walletClient.writeContract({
+      address: AA_FACTORY_ADDRESS!,
+      abi: ritualChatSmartAccountFactoryAbi,
+      functionName: "createAccount",
+      args: [walletAddress],
+    });
+
+    const receipt = await getPublicClient().waitForTransactionReceipt({ hash: deploymentTxHash });
+    if (receipt.status !== "success") {
+      throw new Error("Smart account creation failed on Ritual Testnet.");
+    }
+
+    const deployedCode = await getPublicClient().getCode({ address: smartAccountAddress });
+    if (!deployedCode || deployedCode === "0x") {
+      throw new Error("Smart account creation transaction confirmed, but no account code was found.");
+    }
+
+    return { smartAccountAddress, deploymentTxHash };
   }
 
   async getSmartAccountAddress(walletAddress: Address): Promise<Address> {
     this.assertConfigured();
-    void walletAddress;
+    if (AA_PROVIDER_KIND === "custom" || AA_PROVIDER_KIND === "custom-factory") {
+      return getPublicClient().readContract({
+        address: AA_FACTORY_ADDRESS!,
+        abi: ritualChatSmartAccountFactoryAbi,
+        functionName: "getAccountAddress",
+        args: [walletAddress],
+      });
+    }
 
-    // TODO(real-aa): For custom-factory and ERC-4337 modes, call the selected
-    // factory's deterministic address function. For EIP-7702, the smart account
-    // address may be the connected EOA after delegation, but only after Ritual
-    // SetCodeTx support is verified end-to-end.
-    throw new Error("Real AA smart account address derivation is not implemented yet.");
+    // TODO(real-aa): For ERC-4337 modes, call the selected factory's deterministic
+    // address function. For EIP-7702, the smart account address may be the
+    // connected EOA after delegation, but only after Ritual SetCodeTx support is
+    // verified end-to-end.
+    throw new Error("Real AA smart account address derivation is not implemented yet for this provider.");
   }
 
   async createSessionKey(walletAddress: Address, smartAccountAddress: Address): Promise<SessionKeyResult> {
@@ -97,7 +155,7 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
 }
 
 export function getMissingConfiguration() {
-  if (AA_PROVIDER_KIND === "custom-factory") {
+  if (AA_PROVIDER_KIND === "custom" || AA_PROVIDER_KIND === "custom-factory") {
     return !AA_FACTORY_ADDRESS || !isAddress(AA_FACTORY_ADDRESS) ? ["AA_FACTORY_ADDRESS"] : [];
   }
 

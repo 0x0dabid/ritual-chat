@@ -13,8 +13,9 @@ export const MAX_REQUESTS_PER_IP_PER_DAY = 50;
 
 export const RITUAL_RPC_URL = process.env.RITUAL_RPC_URL;
 export const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
+export const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
 
-export const AA_PROVIDER_KIND = process.env.AA_PROVIDER_KIND ?? "custom-factory";
+export const AA_PROVIDER_KIND = process.env.AA_PROVIDER ?? process.env.AA_PROVIDER_KIND ?? "custom";
 export const AA_FACTORY_ADDRESS = process.env.AA_FACTORY_ADDRESS as `0x${string}` | undefined;
 export const AA_ENTRYPOINT_ADDRESS = process.env.AA_ENTRYPOINT_ADDRESS as `0x${string}` | undefined;
 export const AA_BUNDLER_RPC_URL = process.env.AA_BUNDLER_RPC_URL;

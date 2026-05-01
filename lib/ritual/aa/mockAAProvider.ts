@@ -19,7 +19,9 @@ export class MockAAProviderAdapter implements AAProviderAdapter {
   }
 
   async createOrLoadSmartAccount(walletAddress: Address) {
-    return this.getSmartAccountAddress(walletAddress);
+    return {
+      smartAccountAddress: await this.getSmartAccountAddress(walletAddress),
+    };
   }
 
   async getSmartAccountAddress(walletAddress: Address) {

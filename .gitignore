@@ -7,3 +7,7 @@ data
 *.tsbuildinfo
 background logo.png
 .ritual-build
+artifacts
+cache
+typechain-types
+deployments/*.local.json

@@ -6,6 +6,7 @@ export interface AgentSession {
   id: string;
   userWallet: string;
   smartAccountAddress: string;
+  smartAccountDeploymentTxHash?: string;
   persistentAgentAddress: string;
   sessionKeyAddress: string;
   sessionKeyExpiresAt: string;

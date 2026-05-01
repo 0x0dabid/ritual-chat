@@ -37,29 +37,40 @@ export async function POST(request: Request) {
       });
     }
 
-    const smartAccountAddress = await createOrLoadSmartAccount({
+    const smartAccount = await createOrLoadSmartAccount({
       userWallet: walletAddress,
       existing,
-    }) as Address;
-    const persistentAgentAddress = await createOrLoadPersistentAgent({
-      sessionId,
-      smartAccountAddress,
-      existing,
-    }) as Address;
-    const sessionKey = await createSessionKey({
-      walletAddress,
-      smartAccountAddress,
     });
+    const smartAccountAddress = smartAccount.smartAccountAddress as Address;
+
+    const persistentAgentAddress = MOCK_MODE
+      ? await createOrLoadPersistentAgent({
+        sessionId,
+        smartAccountAddress,
+        existing,
+      }) as Address
+      : "0x0000000000000000000000000000000000000000" as Address;
+
+    const sessionKey = MOCK_MODE
+      ? await createSessionKey({
+        walletAddress,
+        smartAccountAddress,
+      })
+      : {
+        sessionKeyAddress: "0x0000000000000000000000000000000000000000" as Address,
+        sessionKeyExpiresAt: new Date(0).toISOString(),
+      };
 
     const now = new Date().toISOString();
     const session: AgentSession = {
       id: sessionId,
       userWallet: walletAddress,
       smartAccountAddress,
+      smartAccountDeploymentTxHash: smartAccount.deploymentTxHash,
       persistentAgentAddress,
       sessionKeyAddress: sessionKey.sessionKeyAddress,
       sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
-      status: "active",
+      status: MOCK_MODE ? "active" : "creating",
       explorerLink: addressExplorerLink(persistentAgentAddress),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
@@ -70,6 +81,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       smartAccountAddress: session.smartAccountAddress,
+      smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
       persistentAgentAddress: session.persistentAgentAddress,
       sessionKeyAddress: session.sessionKeyAddress,
       status: session.status,

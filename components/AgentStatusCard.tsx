@@ -18,22 +18,33 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function AgentStatusCard({ session }: AgentStatusCardProps) {
+  const agentIsActive = session.status === "active";
+  const hasPersistentAgent = session.persistentAgentAddress !== "0x0000000000000000000000000000000000000000";
+  const hasSessionKey = session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000";
+
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-lg font-semibold">Agent Status</h2>
         <span className="rounded-full bg-ritual-green px-3 py-1 text-xs font-medium text-white">
-          Active
+          {agentIsActive ? "Active" : "Pending"}
         </span>
       </div>
       <div className="mt-4">
         <Row label="Connected Wallet" value={<span title={session.userWallet}>{compact(session.userWallet)}</span>} />
-        <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)}</span>} />
-        <Row label="Persistent Agent" value={<span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>} />
+        <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)} · Active</span>} />
+        <Row
+          label="Persistent Agent"
+          value={hasPersistentAgent
+            ? <span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>
+            : "Pending Ritual integration"}
+        />
         <Row label="Agent Type" value="Persistent Agent" />
         <Row label="Owner" value="User AA Smart Account" />
         <Row label="Network" value="Ritual Testnet" />
-        <Row label="Session" value="Active" />
+        <Row label="Session Key" value={hasSessionKey ? "Active" : "Pending owner authorization"} />
+        <Row label="Session" value={agentIsActive ? "Active" : "Pending"} />
+        <Row label="Chat" value={agentIsActive ? "Enabled" : "Disabled until agent is active"} />
         <Row label="Gas" value="Sponsored / Relayed on Testnet" />
         <Row
           label="Explorer"

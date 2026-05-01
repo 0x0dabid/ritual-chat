@@ -97,11 +97,70 @@ Mock mode is not real on-chain execution. Production mode must not use fake tx h
 The AA provider layer lives under `lib/ritual/aa`.
 
 - `MockAAProviderAdapter` is the default when `MOCK_MODE=true`.
-- `RealAAProviderAdapter` exists for real mode, checks provider-specific environment variables, and returns clear errors when configuration is missing.
+- `RealAAProviderAdapter` exists for real mode, checks provider-specific environment variables, and can use `RitualChatSmartAccountFactory` when `AA_PROVIDER=custom` and `AA_FACTORY_ADDRESS` are configured.
 - Real AA is still not considered complete until smart account deployment/loading is verified on Ritual Testnet.
 - The relayer must never be used as the user's smart account or Persistent Agent owner.
 
 See `docs/aa-provider-selection.md` for the current provider recommendation and remaining blockers.
+
+## Custom Smart Account Factory
+
+This repo includes the first custom AA path:
+
+- `contracts/RitualChatSmartAccount.sol`
+- `contracts/RitualChatSmartAccountFactory.sol`
+- `scripts/deploy-smart-account-factory.ts`
+
+Compile contracts:
+
+```bash
+npm run contracts:compile
+```
+
+Run contract tests:
+
+```bash
+npm run contracts:test
+```
+
+Deploy to Ritual Testnet:
+
+```bash
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+DEPLOYER_PRIVATE_KEY=0x...
+npm run contracts:deploy:ritual
+```
+
+The deploy script prints `AA_FACTORY_ADDRESS=` and writes deployment metadata to:
+
+```bash
+deployments/ritual-smart-account-factory.json
+```
+
+Then set:
+
+```bash
+MOCK_MODE=false
+AA_PROVIDER=custom
+AA_FACTORY_ADDRESS=0x...
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+RELAYER_PRIVATE_KEY=0x...
+```
+
+Complete in this milestone:
+
+- deterministic smart account factory contract
+- one smart account address per wallet owner
+- allowlisted chat-call execution surface
+- owner-only session key setup and owner-only arbitrary calls
+- real adapter can deploy/load the smart account through the configured factory
+
+Still pending:
+
+- owner-authorized session key setup from the connected wallet
+- PersistentAgentFactory launcher deployment through the smart account
+- Ritual LLM transaction flow through the approved account/session-key path
+- full Ritual Testnet verification of the deployed factory
 
 ## Real Ritual Mode
 
@@ -134,6 +193,7 @@ These limits are enforced server-side for the local JSON storage v1.
 - Never commit `.env` or `.env.local`.
 - Never expose private keys in frontend code.
 - Never use `NEXT_PUBLIC_RELAYER_PRIVATE_KEY`.
+- Never use `NEXT_PUBLIC_DEPLOYER_PRIVATE_KEY`.
 - Do not accept arbitrary target addresses from the browser.
 - Do not accept arbitrary calldata from the browser.
 - Only submit approved Ritual chat calls from server-side adapters.

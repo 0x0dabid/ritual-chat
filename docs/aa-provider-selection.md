@@ -68,9 +68,9 @@ Cons:
 - Can add unnecessary product complexity for a simple public text chat.
 - Vendor lock-in may make agent ownership harder to reason about.
 
-## Recommendation For V1
+## Selected V1 Path
 
-Use the adapter layer introduced in this milestone and target a simple custom smart account factory first, unless a Ritual-native EIP-7702 flow has complete wallet and relay support ready for public testing.
+The selected v1 path is a simple custom smart account factory.
 
 The custom factory path is the clearest way to preserve the required ownership model:
 
@@ -83,16 +83,16 @@ ERC-4337 remains a good option if Ritual-compatible bundler, EntryPoint, and pay
 The real adapter currently checks these variables depending on `AA_PROVIDER_KIND`:
 
 ```bash
-AA_PROVIDER_KIND=custom-factory
+AA_PROVIDER=custom
 AA_FACTORY_ADDRESS=
 
-AA_PROVIDER_KIND=erc4337
+AA_PROVIDER=erc4337
 AA_FACTORY_ADDRESS=
 AA_ENTRYPOINT_ADDRESS=
 AA_BUNDLER_RPC_URL=
 AA_PAYMASTER_RPC_URL=
 
-AA_PROVIDER_KIND=eip7702
+AA_PROVIDER=eip7702
 AA_SESSION_KEY_MODULE_ADDRESS=
 ```
 

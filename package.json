@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint app components lib",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "contracts:compile": "hardhat compile",
+    "contracts:test": "hardhat test",
+    "contracts:deploy:ritual": "hardhat run scripts/deploy-smart-account-factory.ts --network ritual"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.6",
@@ -21,12 +24,15 @@
     "wagmi": "^2.19.0"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.2",
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.1",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",
+    "dotenv": "^16.6.1",
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.0.4",
+    "hardhat": "^2.28.6",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2"

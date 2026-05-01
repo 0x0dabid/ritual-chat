@@ -7,7 +7,12 @@ export async function createOrLoadSmartAccount(params: {
   existing?: AgentSession | null;
 }) {
   const { userWallet, existing } = params;
-  if (existing) return existing.smartAccountAddress as Address;
+  if (existing) {
+    return {
+      smartAccountAddress: existing.smartAccountAddress as Address,
+      deploymentTxHash: existing.smartAccountDeploymentTxHash as `0x${string}` | undefined,
+    };
+  }
   if (!isAddress(userWallet)) throw new Error("Invalid EVM wallet address.");
 
   const aaProvider = getAAProviderAdapter();
