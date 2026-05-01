@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
 import { addressExplorerLink, MOCK_MODE, USE_FILE_STORAGE } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkWalletRateLimit } from "@/lib/rateLimit";
-import { createOrLoadPersistentAgent, type PersistentAgentResult } from "@/lib/ritual/persistentAgent";
 import { buildRealSession, walletSessionId } from "@/lib/ritual/realSession";
 import { createOrLoadSmartAccount, createSessionKey } from "@/lib/ritual/smartAccount";
 import { getSession, getSessionByWallet, getSessionMessages, upsertSession } from "@/lib/storage";
@@ -57,30 +56,25 @@ export async function POST(request: Request) {
       return NextResponse.json({
         smartAccountAddress: session.smartAccountAddress,
         smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
-        persistentAgentAddress: session.persistentAgentAddress,
-        persistentAgentCreateTxHash: session.persistentAgentCreateTxHash,
+        smartAccountBalanceWei: session.smartAccountBalanceWei,
+        smartAccountBalanceFormatted: session.smartAccountBalanceFormatted,
+        minimumSmartAccountBalanceWei: session.minimumSmartAccountBalanceWei,
+        hasMinimumSmartAccountBalance: session.hasMinimumSmartAccountBalance,
         sessionKeyAddress: session.sessionKeyAddress,
+        sessionKeyExpiresAt: session.sessionKeyExpiresAt,
         status: session.status,
         smartAccountStatus: "active",
-        persistentAgentStatus: session.persistentAgentStatus ?? "pending",
         basicChatStatus: session.basicChatStatus ?? "pending",
         basicChatStatusMessage: session.basicChatStatusMessage,
         chatStatus: session.chatStatus,
-        sessionKeyStatus: "pending",
-        persistentAgentMissingConfig: session.persistentAgentMissingConfig,
+        sessionKeyStatus: session.sessionKeyStatus,
+        chatTargetApproved: session.chatTargetApproved,
         message: "Your Ritual Smart Account is active.",
         explorerLink: session.explorerLink,
         session,
         messages: [],
       });
     }
-
-    const persistentAgent = await createOrLoadPersistentAgent({
-      sessionId,
-      smartAccountAddress,
-      existing,
-    });
-    const persistentAgentResult = normalizePersistentAgentResult(persistentAgent);
 
     const sessionKey = MOCK_MODE
       ? await createSessionKey({
@@ -99,12 +93,6 @@ export async function POST(request: Request) {
       smartAccountAddress,
       smartAccountDeploymentTxHash: smartAccount.deploymentTxHash,
       smartAccountStatus: "active",
-      persistentAgentAddress: persistentAgentResult.persistentAgentAddress,
-      persistentAgentStatus: persistentAgentResult.persistentAgentStatus,
-      persistentAgentCreateTxHash: persistentAgentResult.persistentAgentCreateTxHash,
-      persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
-      persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
-      persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
       basicChatStatus: "active",
       basicChatStatusMessage: "Mock mode chat is active.",
       chatStatus: "ready",
@@ -112,9 +100,7 @@ export async function POST(request: Request) {
       sessionKeyStatus: MOCK_MODE ? "active" : "pending",
       sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
       status: MOCK_MODE ? "active" : "creating",
-      explorerLink: persistentAgentResult.persistentAgentStatus === "active"
-        ? addressExplorerLink(persistentAgentResult.persistentAgentAddress)
-        : addressExplorerLink(smartAccountAddress),
+      explorerLink: addressExplorerLink(smartAccountAddress),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       mockMode: MOCK_MODE,
@@ -125,14 +111,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       smartAccountAddress: session.smartAccountAddress,
       smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
-      persistentAgentAddress: session.persistentAgentAddress,
       sessionKeyAddress: session.sessionKeyAddress,
       status: session.status,
       explorerLink: session.explorerLink,
       session,
       messages: await getSessionMessages(session.id),
       smartAccountStatus: session.smartAccountStatus,
-      persistentAgentStatus: MOCK_MODE ? session.persistentAgentStatus : "advanced-pending",
       chatStatus: session.chatStatus,
       message: "Your Ritual Smart Account is active.",
     });
@@ -140,15 +124,4 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : "Something went wrong while creating your Ritual Smart Account. Please try again.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
-}
-
-function normalizePersistentAgentResult(value: Address | PersistentAgentResult): PersistentAgentResult {
-  if (typeof value === "string") {
-    return {
-      persistentAgentAddress: value,
-      persistentAgentStatus: "active",
-    };
-  }
-
-  return value;
 }

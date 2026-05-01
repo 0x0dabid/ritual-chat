@@ -13,6 +13,8 @@ export interface SmartAccountResult {
 export interface UserOperationOrTxRequest {
   walletAddress: Address;
   smartAccountAddress: Address;
+  from: Address;
+  to: Address;
   target: Address;
   data: Hex;
   value?: bigint;
@@ -25,6 +27,7 @@ export interface UserOperationOrTx {
   data: Hex;
   value: bigint;
   description: string;
+  txHash?: Hex;
 }
 
 export interface AAProviderAdapter {
@@ -33,6 +36,6 @@ export interface AAProviderAdapter {
   createOrLoadSmartAccount(walletAddress: Address): Promise<SmartAccountResult>;
   getSmartAccountAddress(walletAddress: Address): Promise<Address>;
   createSessionKey(walletAddress: Address, smartAccountAddress: Address): Promise<SessionKeyResult>;
-  validateSessionKey(sessionKeyAddress: Address): Promise<boolean>;
+  validateSessionKey(sessionKeyAddress: Address, smartAccountAddress?: Address): Promise<boolean>;
   buildUserOperationOrTx(request: UserOperationOrTxRequest): Promise<UserOperationOrTx>;
 }

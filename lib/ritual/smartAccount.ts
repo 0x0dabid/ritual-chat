@@ -44,7 +44,10 @@ export async function validateSessionKey(session: AgentSession) {
     throw new Error("Session key creation failed. Please create a new chat session.");
   }
 
-  const isValid = await getAAProviderAdapter().validateSessionKey(session.sessionKeyAddress);
+  const isValid = await getAAProviderAdapter().validateSessionKey(
+    session.sessionKeyAddress as Address,
+    session.smartAccountAddress as Address,
+  );
   if (!isValid) {
     throw new Error("Session key creation failed. Please create a new chat session.");
   }

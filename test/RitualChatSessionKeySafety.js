@@ -1,10 +1,10 @@
 const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 
-const PERSISTENT_AGENT_FACTORY = "0xD4AA9D55215dc8149Af57605e70921Ea16b73591";
+const BLOCKED_TARGET = "0x000000000000000000000000000000000000badd";
 const CHAT_MANAGER = "0x000000000000000000000000000000000000cafe";
 
-describe("RitualChat persistent agent safety", function () {
+describe("RitualChat session key safety", function () {
   async function deployFixture() {
     const [factoryOwner, walletOwner, relayer, sessionKey, target] = await ethers.getSigners();
     const Factory = await ethers.getContractFactory("RitualChatSmartAccountFactory");
@@ -24,13 +24,13 @@ describe("RitualChat persistent agent safety", function () {
     expect(await account.owner()).to.not.equal(relayer.address);
   });
 
-  it("requires factory owner approval before a session key can call PersistentAgentFactory", async function () {
+  it("requires factory owner approval before a session key can call any target", async function () {
     const { walletOwner, sessionKey, account } = await deployFixture();
     const latest = await ethers.provider.getBlock("latest");
     await account.connect(walletOwner).setSessionKey(sessionKey.address, latest.timestamp + 3600);
 
     await expect(
-      account.connect(sessionKey).executeChatCall(PERSISTENT_AGENT_FACTORY, "0x"),
+      account.connect(sessionKey).executeChatCall(BLOCKED_TARGET, "0x"),
     ).to.be.revertedWithCustomError(account, "TargetNotAllowed");
   });
 
@@ -47,7 +47,7 @@ describe("RitualChat persistent agent safety", function () {
 
     await expect(account.connect(sessionKey).executeChatCall(CHAT_MANAGER, "0x"))
       .to.emit(account, "ChatCallExecuted");
-    await expect(account.connect(sessionKey).executeChatCall(PERSISTENT_AGENT_FACTORY, "0x"))
+    await expect(account.connect(sessionKey).executeChatCall(BLOCKED_TARGET, "0x"))
       .to.be.revertedWithCustomError(account, "TargetNotAllowed");
     await expect(account.connect(sessionKey).executeChatCall(target.address, "0x"))
       .to.be.revertedWithCustomError(account, "TargetNotAllowed");

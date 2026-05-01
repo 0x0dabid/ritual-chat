@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
-import { MOCK_MODE, RITUAL_LLM_PRECOMPILE_ADDRESS } from "@/lib/config";
+import { MOCK_MODE } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkSmartAccountRateLimit } from "@/lib/rateLimit";
-import { buildLlmCallData, buildSmartAccountChatCall, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
-import { checkRelayerBalance, submitRelayedTransaction } from "@/lib/ritual/relayer";
+import { getAAProviderAdapter } from "@/lib/ritual/aa";
+import { buildSmartAccountChatCall, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
+import { checkRelayerBalance } from "@/lib/ritual/relayer";
 import { getOnchainSmartAccountSession } from "@/lib/ritual/realSession";
 import { validateSessionKey } from "@/lib/ritual/smartAccount";
 import { addChatMessage, getSession } from "@/lib/storage";
@@ -29,8 +30,19 @@ export async function POST(request: Request) {
         throw new Error("Chat is disabled until the Smart Account is active.");
       }
       if (session.basicChatStatus !== "active") {
+        if (session.chatStatus === "needs-funding") {
+          throw new Error("Fund your Ritual Smart Account with testnet RITUAL before chatting.");
+        }
+        if (session.chatStatus === "needs-session-key") {
+          throw new Error("Authorize the chat session key before chatting.");
+        }
+        if (session.chatStatus === "target-not-approved") {
+          throw new Error("ChatManager is not approved on the smart account factory yet.");
+        }
         throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
       }
+      await validateSessionKey(session);
+      await checkRelayerBalance();
 
       const txRequest = buildSmartAccountChatCall({
         smartAccountAddress: session.smartAccountAddress as Address,
@@ -45,13 +57,34 @@ export async function POST(request: Request) {
         createdAt: new Date().toISOString(),
       };
       await addChatMessage(userMessage);
+      const tx = await getAAProviderAdapter().buildUserOperationOrTx({
+        walletAddress: session.userWallet as Address,
+        smartAccountAddress: session.smartAccountAddress as Address,
+        from: session.sessionKeyAddress as Address,
+        to: txRequest.to,
+        target: txRequest.chatManagerAddress,
+        data: txRequest.data,
+        value: 0n,
+      });
+      if (!tx.txHash) throw new Error("Chat transaction failed before a transaction hash was returned.");
+
+      const assistantMessage: ChatMessage = {
+        id: crypto.randomUUID(),
+        sessionId: session.id,
+        role: "assistant",
+        content: "Response pending on Ritual Testnet.",
+        txHash: tx.txHash,
+        txStatus: "pending",
+        createdAt: new Date().toISOString(),
+      };
+      await addChatMessage(assistantMessage);
 
       return NextResponse.json({
+        txHash: tx.txHash,
         txStatus: "pending",
         assistantResponse: "Response pending on Ritual Testnet.",
-        messageId: crypto.randomUUID(),
-        requiresWalletSubmission: true,
-        txRequest,
+        messageId: assistantMessage.id,
+        message: assistantMessage,
       });
     }
 
@@ -69,18 +102,7 @@ export async function POST(request: Request) {
     };
     await addChatMessage(userMessage);
 
-    const callData = buildLlmCallData({
-      executor: session.sessionKeyAddress as Address,
-      prompt,
-      convoPath: `ritual-chat/${session.smartAccountAddress}/conversation.jsonl`,
-      convoKeyRef: "GCS_CREDS",
-    });
-
-    const txHash = await submitRelayedTransaction({
-      target: RITUAL_LLM_PRECOMPILE_ADDRESS,
-      data: callData,
-      sessionKeyAddress: session.sessionKeyAddress as Address,
-    });
+    const txHash = `0x${crypto.randomUUID().replace(/-/g, "").padEnd(64, "0")}`;
     const assistantResponse = await sendPromptToRitualLLM(prompt);
 
     const assistantMessage: ChatMessage = {

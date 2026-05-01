@@ -2,7 +2,7 @@ export type TxStatus = "pending" | "confirmed" | "failed";
 
 export type AgentStatus = "creating" | "active" | "failed";
 export type IntegrationStatus = "pending" | "creating" | "active" | "failed" | "advanced-pending";
-export type ChatStatus = "ready" | "missing-chat-manager" | "pending";
+export type ChatStatus = "ready" | "missing-chat-manager" | "pending" | "needs-funding" | "needs-session-key" | "target-not-approved";
 
 export interface AgentSession {
   id: string;
@@ -10,14 +10,13 @@ export interface AgentSession {
   smartAccountAddress: string;
   smartAccountDeploymentTxHash?: string;
   smartAccountStatus?: IntegrationStatus;
-  persistentAgentAddress: string;
-  persistentAgentStatus?: IntegrationStatus;
-  persistentAgentCreateTxHash?: string;
-  persistentAgentStatusMessage?: string;
-  persistentAgentProviderLabel?: string;
-  persistentAgentMissingConfig?: string[];
+  smartAccountBalanceWei?: string;
+  smartAccountBalanceFormatted?: string;
+  minimumSmartAccountBalanceWei?: string;
+  hasMinimumSmartAccountBalance?: boolean;
   basicChatStatus?: IntegrationStatus;
   basicChatStatusMessage?: string;
+  chatTargetApproved?: boolean;
   chatStatus?: ChatStatus;
   sessionKeyAddress: string;
   sessionKeyStatus?: IntegrationStatus;

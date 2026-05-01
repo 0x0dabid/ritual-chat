@@ -1,4 +1,4 @@
-import { createWalletClient, http, isAddress, parseAbi, type Address } from "viem";
+import { createWalletClient, encodeFunctionData, http, isAddress, parseAbi, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   AA_BUNDLER_RPC_URL,
@@ -7,13 +7,13 @@ import {
   AA_PAYMASTER_RPC_URL,
   AA_PROVIDER_KIND,
   AA_SESSION_KEY_MODULE_ADDRESS,
+  CHAT_MANAGER_ADDRESS,
   DEPLOYER_PRIVATE_KEY,
   RELAYER_PRIVATE_KEY,
   RITUAL_RPC_URL,
-  SESSION_KEY_TTL_DAYS,
+  SESSION_KEY_TTL_HOURS,
 } from "@/lib/config";
 import { getPublicClient, ritualChain } from "@/lib/ritual/chain";
-import { addDays } from "@/lib/time";
 import type {
   AAProviderAdapter,
   SessionKeyResult,
@@ -27,7 +27,16 @@ const NOT_READY = "Real AA provider is not configured yet.";
 export const ritualChatSmartAccountFactoryAbi = parseAbi([
   "function getAccountAddress(address owner) view returns (address)",
   "function createAccount(address owner) returns (address account)",
+  "function isApprovedChatTarget(address target) view returns (bool)",
   "event AccountCreated(address indexed owner, address indexed account)",
+]);
+
+export const ritualChatSmartAccountAbi = parseAbi([
+  "function sessionKey() view returns (address)",
+  "function sessionKeyExpiresAt() view returns (uint256)",
+  "function setSessionKey(address sessionKey, uint256 expiresAt)",
+  "function isValidSessionKey(address sessionKey) view returns (bool)",
+  "function executeChatCall(address target, bytes data) returns (bytes result)",
 ]);
 
 export class RealAAProviderAdapter implements AAProviderAdapter {
@@ -124,26 +133,80 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
     void walletAddress;
     void smartAccountAddress;
 
-    // TODO(real-aa): Install a scoped session key on the user's smart account.
-    // The key must only authorize chat/check/retry flows and must not authorize
-    // transfers, arbitrary calls, owner changes, or relayer configuration.
-    throw new Error("Real AA session key installation is not implemented yet.");
+    const account = getSessionExecutorAccount();
+    return {
+      sessionKeyAddress: account.address,
+      sessionKeyExpiresAt: getSessionKeyExpiry().toISOString(),
+    };
   }
 
-  async validateSessionKey(sessionKeyAddress: Address) {
+  async validateSessionKey(sessionKeyAddress: Address, smartAccountAddress?: Address) {
     this.assertConfigured();
-    return isAddress(sessionKeyAddress) && addDays(new Date(), SESSION_KEY_TTL_DAYS).getTime() > Date.now();
+    if (!isAddress(sessionKeyAddress)) return false;
+    if (!smartAccountAddress || !isAddress(smartAccountAddress)) return false;
+
+    const [storedSessionKey, expiresAt, valid] = await Promise.all([
+      getPublicClient().readContract({
+        address: smartAccountAddress,
+        abi: ritualChatSmartAccountAbi,
+        functionName: "sessionKey",
+      }),
+      getPublicClient().readContract({
+        address: smartAccountAddress,
+        abi: ritualChatSmartAccountAbi,
+        functionName: "sessionKeyExpiresAt",
+      }),
+      getPublicClient().readContract({
+        address: smartAccountAddress,
+        abi: ritualChatSmartAccountAbi,
+        functionName: "isValidSessionKey",
+        args: [sessionKeyAddress],
+      }),
+    ]);
+
+    return valid
+      && storedSessionKey.toLowerCase() === sessionKeyAddress.toLowerCase()
+      && Number(expiresAt) > Math.floor(Date.now() / 1000);
   }
 
   async buildUserOperationOrTx(request: UserOperationOrTxRequest): Promise<UserOperationOrTx> {
     this.assertConfigured();
-    void request;
+    const account = getSessionExecutorAccount();
+    if (request.from.toLowerCase() !== account.address.toLowerCase()) {
+      throw new Error("Authorized session key does not match the server-side session executor.");
+    }
+    if (request.value && request.value !== 0n) {
+      throw new Error("Session key chat transactions cannot transfer value.");
+    }
+    if (!CHAT_MANAGER_ADDRESS || request.target.toLowerCase() !== CHAT_MANAGER_ADDRESS.toLowerCase()) {
+      throw new Error("Session key can only submit approved RitualChatManager calls.");
+    }
+    if (!RITUAL_RPC_URL) {
+      throw new Error("RPC unavailable. Set RITUAL_RPC_URL to submit chat transactions.");
+    }
 
-    // TODO(real-aa): Build the provider-specific operation:
-    // - custom-factory: relayed transaction from the user-owned account
-    // - erc4337: UserOperation for EntryPoint/bundler/paymaster
-    // - eip7702: SetCodeTx/delegated EOA transaction if supported by wallets
-    throw new Error("Real AA transaction building is not implemented yet.");
+    const walletClient = createWalletClient({
+      account,
+      chain: ritualChain,
+      transport: http(RITUAL_RPC_URL),
+    });
+
+    const txHash = await walletClient.sendTransaction({
+      to: request.to,
+      data: request.data,
+      value: 0n,
+      gas: 6_000_000n,
+    });
+
+    return {
+      kind: "transaction",
+      from: account.address,
+      to: request.to,
+      data: request.data,
+      value: 0n,
+      description: "Session-key chat transaction through RitualChatSmartAccount.executeChatCall.",
+      txHash,
+    };
   }
 
   private assertConfigured() {
@@ -152,6 +215,37 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
       throw new Error(missing.length ? `${NOT_READY} Missing: ${missing.join(", ")}.` : NOT_READY);
     }
   }
+}
+
+export function getSessionExecutorAccount() {
+  const sessionPrivateKey = RELAYER_PRIVATE_KEY;
+  if (!sessionPrivateKey) {
+    throw new Error("Session key authorization is not configured. Missing RELAYER_PRIVATE_KEY.");
+  }
+
+  return privateKeyToAccount(sessionPrivateKey);
+}
+
+export function getSessionKeyExpiry() {
+  return new Date(Date.now() + SESSION_KEY_TTL_HOURS * 60 * 60 * 1000);
+}
+
+export function buildSetSessionKeyCall(sessionKeyAddress: Address, expiresAt: bigint) {
+  return encodeFunctionData({
+    abi: ritualChatSmartAccountAbi,
+    functionName: "setSessionKey",
+    args: [sessionKeyAddress, expiresAt],
+  });
+}
+
+export async function isChatTargetApproved(target: Address) {
+  if (!target || !isAddress(target)) return false;
+  return getPublicClient().readContract({
+    address: AA_FACTORY_ADDRESS!,
+    abi: ritualChatSmartAccountFactoryAbi,
+    functionName: "isApprovedChatTarget",
+    args: [target],
+  });
 }
 
 export function getMissingConfiguration() {

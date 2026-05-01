@@ -1,5 +1,4 @@
 import type { AgentSession } from "@/lib/types";
-import { groupPersistentAgentMissingConfig } from "@/components/persistentAgentConfigGroups";
 
 interface AgentStatusCardProps {
   session: AgentSession;
@@ -19,14 +18,24 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function AgentStatusCard({ session }: AgentStatusCardProps) {
-  const hasPersistentAgent = session.persistentAgentAddress !== "0x0000000000000000000000000000000000000000";
-  const missingConfigGroups = groupPersistentAgentMissingConfig(session.persistentAgentMissingConfig);
   const chatStatus = session.chatStatus ?? (session.basicChatStatus === "active" ? "ready" : "missing-chat-manager");
   const chatStatusLabel = chatStatus === "ready"
     ? "Ready"
     : chatStatus === "missing-chat-manager"
       ? "Missing ChatManager"
-      : "Pending";
+      : chatStatus === "needs-funding"
+        ? "Needs funding"
+        : chatStatus === "needs-session-key"
+          ? "Needs session key"
+          : chatStatus === "target-not-approved"
+            ? "Target not approved"
+            : "Pending";
+  const balanceLabel = session.smartAccountBalanceFormatted
+    ? `${Number(session.smartAccountBalanceFormatted).toLocaleString(undefined, { maximumFractionDigits: 5 })} RITUAL`
+    : "Unknown";
+  const sessionKeyLabel = session.sessionKeyStatus === "active"
+    ? "Active"
+    : "Pending authorization";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -41,31 +50,13 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
         <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)}</span>} />
         <Row label="Network" value="Ritual Testnet" />
         <Row label="Status" value="Active" />
+        <Row label="Balance" value={balanceLabel} />
+        <Row label="Minimum Balance" value={session.hasMinimumSmartAccountBalance ? "Met" : "Fund needed"} />
+        <Row label="Session Key" value={sessionKeyLabel} />
+        {session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000" ? (
+          <Row label="Session Address" value={<span title={session.sessionKeyAddress}>{compact(session.sessionKeyAddress)}</span>} />
+        ) : null}
         <Row label="Chat Status" value={chatStatusLabel} />
-        <Row
-          label="Persistent Agent"
-          value={hasPersistentAgent
-            ? <span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>
-            : "Advanced recognition pending"}
-        />
-        {session.persistentAgentProviderLabel ? (
-          <Row label="LLM Provider" value={session.persistentAgentProviderLabel} />
-        ) : null}
-        {session.persistentAgentCreateTxHash ? (
-          <Row
-            label="Persistent Agent Create TX"
-            value={(
-              <a
-                className="text-ritual-green underline-offset-4 hover:underline"
-                href={`https://explorer.ritualfoundation.org/tx/${session.persistentAgentCreateTxHash}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {compact(session.persistentAgentCreateTxHash)}
-              </a>
-            )}
-          />
-        ) : null}
         <Row
           label="Explorer"
           value={(
@@ -80,24 +71,15 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
           )}
         />
       </div>
-      {session.persistentAgentMissingConfig?.length ? (
+      {chatStatus !== "ready" ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
-          <p>
-            Advanced Persistent Agent recognition is pending. This public v1 lets users create a Ritual Smart Account
-            and use the Ritual LLM chat path.
-          </p>
-          <div className="mt-3 space-y-2">
-            {missingConfigGroups.map((group) => (
-              <div key={group.title}>
-                <div className="text-xs font-semibold uppercase tracking-wide text-ritual-green">
-                  {group.title}
-                </div>
-                <div className="break-words font-mono text-xs text-black/58">
-                  {group.items.join(", ")}
-                </div>
-              </div>
-            ))}
-          </div>
+          {chatStatus === "needs-funding"
+            ? "Fund your Ritual Smart Account with a small amount of testnet RITUAL before chatting."
+            : chatStatus === "needs-session-key"
+              ? "Authorize the limited chat session key once to chat without wallet popups."
+              : chatStatus === "target-not-approved"
+                ? "CHAT_MANAGER_ADDRESS must be approved on the smart account factory before chat can run."
+                : "Configure CHAT_MANAGER_ADDRESS before using Ritual LLM chat."}
         </div>
       ) : null}
     </section>

@@ -9,7 +9,6 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { TestnetNotice } from "@/components/TestnetNotice";
-import { groupPersistentAgentMissingConfig } from "@/components/persistentAgentConfigGroups";
 import type { AgentSession, ChatMessage } from "@/lib/types";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
@@ -31,18 +30,19 @@ export default function Home() {
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE === "true", [agent]);
   const walletAddress = isConnected && address ? address : null;
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
-  const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);
   const chatReady = Boolean(agent && (
     (agent.mockMode && agent.status === "active")
-    || (!agent.mockMode && agent.smartAccountStatus === "active" && agent.basicChatStatus === "active")
+    || (!agent.mockMode && agent.smartAccountStatus === "active" && agent.chatStatus === "ready")
   ));
   const chatDisabledMessage = agent?.smartAccountStatus === "active" && agent.chatStatus === "missing-chat-manager"
     ? "ChatManager is not configured yet. Smart Account creation is still available."
+    : agent?.chatStatus === "needs-funding"
+      ? "Fund your Ritual Smart Account with testnet RITUAL before chatting."
+      : agent?.chatStatus === "needs-session-key"
+        ? "Authorize the chat session key once before chatting."
+        : agent?.chatStatus === "target-not-approved"
+          ? "ChatManager is not approved on the smart account factory yet."
     : undefined;
-  const missingConfigGroups = useMemo(
-    () => groupPersistentAgentMissingConfig(agent?.persistentAgentMissingConfig),
-    [agent?.persistentAgentMissingConfig],
-  );
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -150,6 +150,58 @@ export default function Home() {
     }
   }
 
+  async function refreshSession() {
+    if (!walletAddress) return;
+    const response = await fetch(`/api/agent/status?walletAddress=${encodeURIComponent(walletAddress)}`);
+    if (!response.ok) return;
+    const data = await response.json();
+    if (data?.session) {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.id);
+      setSessionId(data.session.id);
+      setAgent(data.session);
+      setMessages(data.messages ?? []);
+    }
+  }
+
+  async function authorizeSessionKey() {
+    if (!walletAddress) {
+      setError("Connect your wallet first to authorize chat.");
+      return;
+    }
+    if (!walletClient) {
+      setError("Connect your wallet before authorizing chat.");
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setLoadingStep("Activating chat session...");
+    try {
+      const response = await fetch("/api/session/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ walletAddress }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Session key authorization failed.");
+
+      const txHash = await walletClient.sendTransaction({
+        to: data.txRequest.to,
+        data: data.txRequest.data,
+        value: BigInt(data.txRequest.value ?? "0"),
+        gas: 250_000n,
+      });
+      await pollTx(txHash);
+      await refreshSession();
+      setNotice("Chat session authorized. You can now send messages without wallet popups.");
+      setLoadingStep(null);
+    } catch (err) {
+      console.error("Session key authorization failed", err);
+      setLoadingStep(null);
+      setError(formatChatTransactionError(err));
+    }
+  }
+
   async function sendMessage(prompt: string) {
     if (!agent) return;
     if (isSubmittingTx) return;
@@ -174,27 +226,6 @@ export default function Home() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Ritual LLM response failed");
-
-      if (data.requiresWalletSubmission) {
-        if (!walletClient) throw new Error("Connect your wallet before sending chat transactions.");
-        const txHash = await walletClient.sendTransaction({
-          to: data.txRequest.to,
-          data: data.txRequest.data,
-          gas: 5_000_000n,
-        });
-        const pendingMessage: ChatMessage = {
-          id: data.messageId ?? crypto.randomUUID(),
-          sessionId: agent.id,
-          role: "assistant",
-          content: "Response pending on Ritual Testnet.",
-          txHash,
-          txStatus: "pending",
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((current) => [...current, pendingMessage]);
-        pollTx(txHash);
-        return;
-      }
 
       setMessages((current) => [...current, data.message]);
       pollTx(data.message.txHash);
@@ -245,34 +276,12 @@ export default function Home() {
               walletAddress={walletAddress}
               walletPending={walletPending}
               noInjectedWallet={hasInjectedWallet === false}
+              sessionKeyStatus={agent?.sessionKeyStatus}
               onConnectWallet={connectWallet}
               onDisconnectWallet={() => disconnect()}
               onCreate={createAgent}
+              onAuthorizeSessionKey={authorizeSessionKey}
             />
-            {realModePending ? (
-              <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
-                <h2 className="text-lg font-semibold">Next step: Persistent Agent integration</h2>
-                <p className="mt-2 text-sm leading-6 text-black/68">
-                  {persistentConfigMissing
-                    ? "Advanced Persistent Agent recognition is pending. Basic chat uses Ritual LLM. Do not use placeholder Persistent Agent values."
-                    : "Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual's PersistentAgentFactory so it can own a real Persistent Agent."}
-                </p>
-                {persistentConfigMissing ? (
-                  <div className="mt-3 space-y-2 text-xs leading-5">
-                    {missingConfigGroups.map((group) => (
-                      <div key={group.title}>
-                        <div className="font-semibold uppercase tracking-wide text-ritual-green">
-                          {group.title}
-                        </div>
-                        <div className="break-words font-mono text-black/58">
-                          {group.items.join(", ")}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
             {agent ? <AgentStatusCard session={agent} /> : null}
           </div>
           <ChatWindow
