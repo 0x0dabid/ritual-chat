@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+interface IRitualWallet {
+    function depositFor(address user, uint256 lockDuration) external payable;
+    function balanceOf(address account) external view returns (uint256);
+    function lockUntil(address account) external view returns (uint256);
+}
+
 contract RitualChatManager {
     error InvalidAddress();
+    error InvalidLockDuration();
+    error MissingFunding();
     error EmptyPrompt();
     error PromptTooLong();
+    error InsufficientLlmLock(uint256 requiredUntil, uint256 lockedUntil);
     error LlmCallFailed(bytes result);
 
     struct StorageRef {
@@ -15,8 +24,11 @@ contract RitualChatManager {
 
     address public immutable llmPrecompile;
     address public immutable executor;
+    IRitualWallet public immutable ritualWallet;
+    uint256 public immutable llmLockDuration;
     string public constant MODEL = "zai-org/GLM-4.7-FP8";
     uint256 public constant MAX_PROMPT_LENGTH = 1000;
+    uint256 public constant LLM_TTL_BLOCKS = 300;
 
     event ChatMessageSubmitted(
         address indexed smartAccount,
@@ -24,17 +36,46 @@ contract RitualChatManager {
         string prompt,
         bytes output
     );
+    event LlmWalletLockRefreshed(address indexed funder, uint256 amount, uint256 lockDuration);
 
-    constructor(address llmPrecompile_, address executor_) {
-        if (llmPrecompile_ == address(0) || executor_ == address(0)) revert InvalidAddress();
+    constructor(
+        address llmPrecompile_,
+        address executor_,
+        address ritualWallet_,
+        uint256 llmLockDuration_
+    ) {
+        if (llmPrecompile_ == address(0) || executor_ == address(0) || ritualWallet_ == address(0)) {
+            revert InvalidAddress();
+        }
+        if (llmLockDuration_ < LLM_TTL_BLOCKS) revert InvalidLockDuration();
         llmPrecompile = llmPrecompile_;
         executor = executor_;
+        ritualWallet = IRitualWallet(ritualWallet_);
+        llmLockDuration = llmLockDuration_;
+    }
+
+    receive() external payable {}
+
+    function refreshLlmWalletLock() external payable {
+        if (msg.value == 0) revert MissingFunding();
+
+        ritualWallet.depositFor{value: msg.value}(address(this), llmLockDuration);
+        emit LlmWalletLockRefreshed(msg.sender, msg.value, llmLockDuration);
+    }
+
+    function llmWalletStatus() external view returns (uint256 balance, uint256 lockedUntil) {
+        balance = ritualWallet.balanceOf(address(this));
+        lockedUntil = ritualWallet.lockUntil(address(this));
     }
 
     function sendChatMessage(string calldata prompt) external returns (bytes memory output) {
         bytes memory promptBytes = bytes(prompt);
         if (promptBytes.length == 0) revert EmptyPrompt();
         if (promptBytes.length > MAX_PROMPT_LENGTH) revert PromptTooLong();
+
+        uint256 requiredUntil = block.number + LLM_TTL_BLOCKS;
+        uint256 lockedUntil = ritualWallet.lockUntil(address(this));
+        if (lockedUntil < requiredUntil) revert InsufficientLlmLock(requiredUntil, lockedUntil);
 
         bytes memory input = _buildLlmInput(prompt);
         (bool ok, bytes memory result) = llmPrecompile.call(input);
@@ -51,7 +92,7 @@ contract RitualChatManager {
         return abi.encode(
             executor,
             emptyBytesArray,
-            uint256(300),
+            LLM_TTL_BLOCKS,
             emptyBytesArray,
             bytes(""),
             _messagesJson(prompt),

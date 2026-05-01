@@ -71,6 +71,8 @@ PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
 PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000820
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 RITUAL_LLM_EXECUTOR_ADDRESS=
+RITUAL_LLM_LOCK_DURATION=10000
+RITUAL_LLM_WALLET_FUNDING_WEI=
 CHAT_MANAGER_ADDRESS=
 
 DATABASE_URL=
@@ -218,6 +220,8 @@ DEPLOYER_PRIVATE_KEY=0x...
 AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
 RITUAL_LLM_EXECUTOR_ADDRESS=0x...
+RITUAL_LLM_LOCK_DURATION=10000
+RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
 npm run contracts:deploy:chat
 ```
 
@@ -234,6 +238,14 @@ CHAT_MANAGER_ADDRESS=0x...
 ```
 
 The script also allowlists `CHAT_MANAGER_ADDRESS` on `RitualChatSmartAccountFactory` when `AA_FACTORY_ADDRESS` is configured and the deployer owns the factory. Do not allowlist arbitrary targets.
+
+`RitualChatManager` calls the async LLM precompile, so the manager address must have a live RitualWallet R-lock. The deploy script calls `refreshLlmWalletLock()` when `RITUAL_LLM_WALLET_FUNDING_WEI` is set. If you deploy without funding, fund and lock the manager before public chat submissions:
+
+```bash
+RITUAL_LLM_LOCK_DURATION=10000
+RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+npm run contracts:deploy:chat
+```
 
 Until real session-key sponsorship is wired, the connected wallet submits the smart-account chat transaction. The UI shows `Response pending on Ritual Testnet.` with the real transaction hash and then tracks confirmation.
 
@@ -266,6 +278,26 @@ RITUAL_LLM_EXECUTOR_ADDRESS=0x...
 ```
 
 Use the printed executor address when deploying `RitualChatManager`. The dApp uses the executor `teeAddress` and public key; the registry endpoint is intentionally not used by this app flow.
+
+### Troubleshooting: insufficient lock duration
+
+Error:
+
+```text
+insufficient lock duration, locked until 0
+```
+
+Cause: Ritual LLM precompile `0x0802` is async and requires the caller to have a non-zero RitualWallet lock that lasts beyond the request TTL. In this app, `RitualChatManager` is the contract that calls the precompile, so the manager must be funded and locked in `RitualWallet`.
+
+Fix: set a positive lock duration and redeploy or refresh the ChatManager lock:
+
+```bash
+RITUAL_LLM_LOCK_DURATION=10000
+RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+npm run contracts:deploy:chat
+```
+
+If `CHAT_MANAGER_ADDRESS` is already deployed, call `refreshLlmWalletLock()` on that manager with testnet RITUAL value. Use a fresh deployer wallet with only testnet funds.
 
 ### Official DeepSeek API Status
 
