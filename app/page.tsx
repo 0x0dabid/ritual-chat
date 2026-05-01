@@ -32,9 +32,12 @@ export default function Home() {
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
   const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);
   const chatReady = Boolean(agent && (
-    agent.status === "active"
+    (agent.mockMode && agent.status === "active")
     || (!agent.mockMode && agent.smartAccountStatus === "active" && agent.basicChatStatus === "active")
   ));
+  const chatDisabledMessage = agent?.smartAccountStatus === "active" && agent.chatStatus === "missing-chat-manager"
+    ? "ChatManager is not configured yet. Smart Account creation is still available."
+    : undefined;
   const missingConfigGroups = useMemo(
     () => groupPersistentAgentMissingConfig(agent?.persistentAgentMissingConfig),
     [agent?.persistentAgentMissingConfig],
@@ -57,7 +60,7 @@ export default function Home() {
         setMessages(data.messages ?? []);
       })
       .catch(() => {
-        setError("Something went wrong while loading your Ritual agent. Please try again.");
+        setError("Something went wrong while loading your Ritual Smart Account. Please try again.");
       });
   }, []);
 
@@ -83,7 +86,7 @@ export default function Home() {
         setMessages(data.messages ?? []);
       })
       .catch(() => {
-        setError("Something went wrong while loading your Ritual agent. Please try again.");
+        setError("Something went wrong while loading your Ritual Smart Account. Please try again.");
       });
   }, [walletAddress]);
 
@@ -124,9 +127,8 @@ export default function Home() {
         }),
       });
 
-      setLoadingStep("Creating Persistent Agent...");
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Agent creation failed");
+      if (!response.ok) throw new Error(data.error ?? "Smart Account creation failed");
 
       window.localStorage.setItem(SESSION_STORAGE_KEY, data.session.id);
       setSessionId(data.session.id);
@@ -135,16 +137,15 @@ export default function Home() {
 
       if (!data.session.mockMode && data.session.status !== "active") {
         setLoadingStep(null);
-        setNotice(data.message ?? "Smart Account loaded successfully. Persistent Agent integration is pending.");
+        setNotice(data.message ?? "Your Ritual Smart Account is active.");
         return;
       }
 
-      setLoadingStep("Activating chat session...");
-      setLoadingStep("Ready to chat.");
+      setLoadingStep(data.session.basicChatStatus === "active" ? "Ready to chat." : "Ready.");
       window.setTimeout(() => setLoadingStep(null), 900);
     } catch (err) {
       setLoadingStep(null);
-      setError(err instanceof Error ? err.message : "Something went wrong while creating your Ritual agent. Please try again.");
+      setError(err instanceof Error ? err.message : "Something went wrong while creating your Ritual Smart Account. Please try again.");
     }
   }
 
@@ -270,6 +271,7 @@ export default function Home() {
           </div>
           <ChatWindow
             disabled={!chatReady}
+            disabledMessage={chatDisabledMessage}
             messages={messages}
             onSend={sendMessage}
           />

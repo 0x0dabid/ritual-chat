@@ -31,8 +31,8 @@ export function AgentSetupCard({
   const createButtonLabel = realModePending
     ? "Smart Account Created"
     : active
-      ? "Ready to chat."
-      : "Create My Agent";
+      ? "Smart Account Active"
+      : "Create My Smart Account";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -43,11 +43,13 @@ export function AgentSetupCard({
           <div className="mt-1 h-5 w-5 rounded-full border border-ritual-green/45" />
         )}
         <div>
-          <h2 className="text-lg font-semibold">Create your Persistent Ritual Agent</h2>
+          <h2 className="text-lg font-semibold">Create your Ritual Smart Account</h2>
           <p className="mt-2 text-sm leading-6 text-black/68">
-            {hasWallet
-              ? "Your connected wallet will be used as the identity for your permanent Ritual Smart Account."
-              : "Connect your wallet first to create your Ritual Smart Account."}
+            {active || realModePending
+              ? "Your Ritual Smart Account is active."
+              : hasWallet
+                ? "Your connected wallet will be used as the identity for your permanent Ritual Smart Account."
+                : "Connect your wallet to create your Ritual Smart Account."}
           </p>
         </div>
       </div>
@@ -78,7 +80,7 @@ export function AgentSetupCard({
       </button>
       {realModePending ? (
         <p className="mt-3 text-sm leading-6 text-black/68">
-          Your Ritual Smart Account is active. Persistent Agent creation is the next integration step.
+          Your Ritual Smart Account is active.
         </p>
       ) : null}
       {loadingStep ? (

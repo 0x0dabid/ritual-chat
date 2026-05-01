@@ -31,12 +31,19 @@ export async function buildRealSession(params: {
   createdAt?: string;
 }): Promise<AgentSession> {
   const sessionId = walletSessionId(params.walletAddress);
-  const persistentAgent = await createOrLoadPersistentAgent({
+  const persistentAgentResult = await createOrLoadPersistentAgent({
     sessionId,
     smartAccountAddress: params.smartAccountAddress,
-  });
-  const persistentAgentResult = normalizePersistentAgentResult(persistentAgent);
+  })
+    .then(normalizePersistentAgentResult)
+    .catch((): PersistentAgentResult => ({
+      persistentAgentAddress: ZERO_ADDRESS,
+      persistentAgentStatus: "advanced-pending",
+      persistentAgentStatusMessage: "Advanced Persistent Agent recognition is pending.",
+      persistentAgentMissingConfig: ["PERSISTENT_AGENT_ADVANCED_RECOGNITION_PENDING"],
+    }));
   const basicChatEnabled = isBasicChatConfigured();
+  const chatStatus = basicChatEnabled ? "ready" : "missing-chat-manager";
   const now = new Date().toISOString();
 
   return {
@@ -46,17 +53,18 @@ export async function buildRealSession(params: {
     smartAccountDeploymentTxHash: params.smartAccountDeploymentTxHash,
     smartAccountStatus: "active",
     persistentAgentAddress: persistentAgentResult.persistentAgentAddress,
-    persistentAgentStatus: persistentAgentResult.persistentAgentStatus,
+    persistentAgentStatus: persistentAgentResult.persistentAgentStatus === "active" ? "active" : "advanced-pending",
     persistentAgentCreateTxHash: persistentAgentResult.persistentAgentCreateTxHash,
     persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
     persistentAgentProviderLabel: persistentAgentResult.persistentAgentProviderLabel,
     persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
     basicChatStatus: basicChatEnabled ? "active" : "pending",
     basicChatStatusMessage: getBasicChatStatusMessage(),
+    chatStatus,
     sessionKeyAddress: ZERO_ADDRESS,
     sessionKeyStatus: "pending",
     sessionKeyExpiresAt: new Date(0).toISOString(),
-    status: "creating",
+    status: "active",
     explorerLink: persistentAgentResult.persistentAgentStatus === "active"
       ? addressExplorerLink(persistentAgentResult.persistentAgentAddress)
       : addressExplorerLink(params.smartAccountAddress),

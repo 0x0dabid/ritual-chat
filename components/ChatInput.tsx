@@ -29,7 +29,7 @@ export function ChatInput({ disabled, onSend }: ChatInputProps) {
         <textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
-          placeholder="Ask your Ritual agent anything..."
+          placeholder="Ask Ritual LLM anything..."
           disabled={disabled || sending}
           maxLength={1000}
           rows={2}

@@ -1,6 +1,6 @@
 # RITUAL CHAT
 
-RITUAL CHAT is a simple public, text-only ChatGPT-style app for Ritual Testnet. It gives each user a permanent smart-account identity, creates or loads a Persistent Ritual Agent for that smart account, submits chat through a limited session key, and shows a clickable Ritual Testnet transaction hash for every assistant response.
+RITUAL CHAT is a simple public, text-only ChatGPT-style app for Ritual Testnet. For public v1, each user connects a wallet, creates or loads a permanent Ritual Smart Account, and can use the Ritual LLM chat path when `CHAT_MANAGER_ADDRESS` is configured. Every chat submission shows a clickable Ritual Testnet transaction hash.
 
 This app intentionally does not include media chat, image generation, file upload, voice chat, NFT launchpad features, or arbitrary transaction tools.
 
@@ -15,6 +15,17 @@ The intended ownership model is:
 `user wallet/session -> permanent AA smart account -> owns Persistent Ritual Agent -> uses Ritual LLM -> returns tx hash`
 
 Each user should have one permanent AA smart account. The app stores and displays that smart account address, and the Persistent Agent is tied to that account, not to a shared backend wallet.
+
+## Public v1 Scope
+
+Public v1 is the smart-account and Ritual LLM chat milestone:
+
+- Public users can connect an EVM wallet and create or load their own Ritual Smart Account.
+- Persistent Agent recognition is advanced and not required for public v1.
+- Basic chat requires `CHAT_MANAGER_ADDRESS`.
+- If `CHAT_MANAGER_ADDRESS` is missing, Smart Account creation still works and chat shows `ChatManager is not configured yet. Smart Account creation is still available.`
+- v1 uses connected wallet transaction submission. Sponsored session keys come later.
+- The relayer must not own user accounts or Persistent Agents.
 
 ## Relayer Model
 
@@ -335,15 +346,15 @@ For Vercel, run the app with:
 ```bash
 MOCK_MODE=false
 NEXT_PUBLIC_MOCK_MODE=false
-AA_PROVIDER=custom
+AA_PROVIDER_KIND=custom
 STORAGE_DRIVER=memory
 NEXT_PUBLIC_RITUAL_CHAIN_ID=1979
 NEXT_PUBLIC_RITUAL_EXPLORER_URL=https://explorer.ritualfoundation.org
 NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
-RITUAL_LLM_PRECOMPILE_ADDRESS=0x0000000000000000000000000000000000000802
-CHAT_MANAGER_ADDRESS=0x...
+RITUAL_LLM_PRECOMPILE_ADDRESS=0x0802
+CHAT_MANAGER_ADDRESS=
 PERSISTENT_AGENT_FACTORY_ADDRESS=0xD4AA9D55215dc8149Af57605e70921Ea16b73591
 PERSISTENT_AGENT_PRECOMPILE_ADDRESS=0x0820
 ```

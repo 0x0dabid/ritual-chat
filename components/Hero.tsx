@@ -31,11 +31,11 @@ export function Hero({ onCreate, disabled = false }: HeroProps) {
             disabled={disabled}
             className="inline-flex items-center gap-2 rounded-lg bg-ritual-green px-5 py-3 font-medium text-white shadow-soft transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
           >
-            Create My Agent
+            Create My Smart Account
             <ArrowRight size={18} aria-hidden="true" />
           </button>
           <p className="max-w-md text-sm text-black/62">
-            Each user gets a permanent Ritual Smart Account and a Persistent Agent.
+            Each user gets a permanent Ritual Smart Account for Ritual LLM chat.
           </p>
         </div>
       </div>

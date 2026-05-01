@@ -65,10 +65,10 @@ export async function POST(request: Request) {
         persistentAgentStatus: session.persistentAgentStatus ?? "pending",
         basicChatStatus: session.basicChatStatus ?? "pending",
         basicChatStatusMessage: session.basicChatStatusMessage,
+        chatStatus: session.chatStatus,
         sessionKeyStatus: "pending",
         persistentAgentMissingConfig: session.persistentAgentMissingConfig,
-        message: session.persistentAgentStatusMessage
-          ?? "Smart Account loaded successfully. Persistent Agent integration is pending.",
+        message: "Your Ritual Smart Account is active.",
         explorerLink: session.explorerLink,
         session,
         messages: [],
@@ -107,6 +107,7 @@ export async function POST(request: Request) {
       persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
       basicChatStatus: "active",
       basicChatStatusMessage: "Mock mode chat is active.",
+      chatStatus: "ready",
       sessionKeyAddress: sessionKey.sessionKeyAddress,
       sessionKeyStatus: MOCK_MODE ? "active" : "pending",
       sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
@@ -130,9 +131,13 @@ export async function POST(request: Request) {
       explorerLink: session.explorerLink,
       session,
       messages: await getSessionMessages(session.id),
+      smartAccountStatus: session.smartAccountStatus,
+      persistentAgentStatus: MOCK_MODE ? session.persistentAgentStatus : "advanced-pending",
+      chatStatus: session.chatStatus,
+      message: "Your Ritual Smart Account is active.",
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Something went wrong while creating your Ritual agent. Please try again.";
+    const message = err instanceof Error ? err.message : "Something went wrong while creating your Ritual Smart Account. Please try again.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -4,11 +4,12 @@ import { ChatMessage } from "@/components/ChatMessage";
 
 interface ChatWindowProps {
   disabled: boolean;
+  disabledMessage?: string;
   messages: ChatMessageType[];
   onSend: (prompt: string) => Promise<void>;
 }
 
-export function ChatWindow({ disabled, messages, onSend }: ChatWindowProps) {
+export function ChatWindow({ disabled, disabledMessage, messages, onSend }: ChatWindowProps) {
   return (
     <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-ritual-green/20 bg-ritual-card shadow-soft">
       <div className="border-b border-ritual-green/15 px-5 py-4">
@@ -18,6 +19,11 @@ export function ChatWindow({ disabled, messages, onSend }: ChatWindowProps) {
         </p>
       </div>
       <div className="flex-1 space-y-4 overflow-y-auto p-5">
+        {disabled && disabledMessage ? (
+          <div className="rounded-lg border border-ritual-green/15 bg-white/35 px-4 py-3 text-sm text-black/68">
+            {disabledMessage}
+          </div>
+        ) : null}
         {messages.length === 0 ? (
           <div className="flex h-full min-h-80 items-center justify-center text-center text-sm leading-6 text-black/55">
             Start a conversation with Ritual LLM. Responses will appear here with a Ritual Testnet transaction hash.

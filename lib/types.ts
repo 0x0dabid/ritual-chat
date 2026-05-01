@@ -1,7 +1,8 @@
 export type TxStatus = "pending" | "confirmed" | "failed";
 
 export type AgentStatus = "creating" | "active" | "failed";
-export type IntegrationStatus = "pending" | "creating" | "active" | "failed";
+export type IntegrationStatus = "pending" | "creating" | "active" | "failed" | "advanced-pending";
+export type ChatStatus = "ready" | "missing-chat-manager" | "pending";
 
 export interface AgentSession {
   id: string;
@@ -17,6 +18,7 @@ export interface AgentSession {
   persistentAgentMissingConfig?: string[];
   basicChatStatus?: IntegrationStatus;
   basicChatStatusMessage?: string;
+  chatStatus?: ChatStatus;
   sessionKeyAddress: string;
   sessionKeyStatus?: IntegrationStatus;
   sessionKeyExpiresAt: string;

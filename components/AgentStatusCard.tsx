@@ -19,36 +19,35 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function AgentStatusCard({ session }: AgentStatusCardProps) {
-  const agentIsActive = session.status === "active";
   const hasPersistentAgent = session.persistentAgentAddress !== "0x0000000000000000000000000000000000000000";
-  const hasSessionKey = session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000";
-  const persistentAgentStatus = session.persistentAgentStatus ?? (hasPersistentAgent ? "active" : "pending");
-  const sessionKeyStatus = session.sessionKeyStatus ?? (hasSessionKey ? "active" : "pending");
   const missingConfigGroups = groupPersistentAgentMissingConfig(session.persistentAgentMissingConfig);
+  const chatStatus = session.chatStatus ?? (session.basicChatStatus === "active" ? "ready" : "missing-chat-manager");
+  const chatStatusLabel = chatStatus === "ready"
+    ? "Ready"
+    : chatStatus === "missing-chat-manager"
+      ? "Missing ChatManager"
+      : "Pending";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold">Agent Status</h2>
+        <h2 className="text-lg font-semibold">Smart Account Status</h2>
         <span className="rounded-full bg-ritual-green px-3 py-1 text-xs font-medium text-white">
-          {agentIsActive ? "Active" : "Pending"}
+          Active
         </span>
       </div>
       <div className="mt-4">
         <Row label="Connected Wallet" value={<span title={session.userWallet}>{compact(session.userWallet)}</span>} />
-        <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)} · Active</span>} />
+        <Row label="Smart Account" value={<span title={session.smartAccountAddress}>{compact(session.smartAccountAddress)}</span>} />
+        <Row label="Network" value="Ritual Testnet" />
+        <Row label="Status" value="Active" />
+        <Row label="Chat Status" value={chatStatusLabel} />
         <Row
           label="Persistent Agent"
           value={hasPersistentAgent
             ? <span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>
-            : persistentAgentStatus === "failed"
-              ? "Failed"
-              : persistentAgentStatus === "creating"
-                ? "Creating"
-                : "Pending Ritual integration"}
+            : "Advanced recognition pending"}
         />
-        <Row label="Persistent Agent Status" value={persistentAgentStatus[0].toUpperCase() + persistentAgentStatus.slice(1)} />
-        <Row label="Basic Chat" value={session.basicChatStatus === "active" ? "Active via Ritual LLM" : "Pending Chat Manager"} />
         {session.persistentAgentProviderLabel ? (
           <Row label="LLM Provider" value={session.persistentAgentProviderLabel} />
         ) : null}
@@ -67,13 +66,6 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
             )}
           />
         ) : null}
-        <Row label="Agent Type" value="Persistent Agent" />
-        <Row label="Owner" value="User AA Smart Account" />
-        <Row label="Network" value="Ritual Testnet" />
-        <Row label="Session Key" value={sessionKeyStatus === "active" ? "Active" : "Pending owner authorization"} />
-        <Row label="Session" value={agentIsActive ? "Active" : "Pending"} />
-        <Row label="Chat" value={agentIsActive ? "Enabled" : "Disabled until agent is active"} />
-        <Row label="Gas" value="Sponsored / Relayed on Testnet" />
         <Row
           label="Explorer"
           value={(
@@ -83,7 +75,7 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
               target="_blank"
               rel="noreferrer"
             >
-              View Agent
+              View Smart Account
             </a>
           )}
         />
@@ -91,8 +83,8 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
       {session.persistentAgentMissingConfig?.length ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
           <p>
-            Advanced Persistent Agent recognition is pending. Basic chat uses Ritual LLM.
-            Persistent Agent creation still requires real Ritual executor, LLM, DA, DKMS, and scheduler configuration.
+            Advanced Persistent Agent recognition is pending. This public v1 lets users create a Ritual Smart Account
+            and use the Ritual LLM chat path.
           </p>
           <div className="mt-3 space-y-2">
             {missingConfigGroups.map((group) => (

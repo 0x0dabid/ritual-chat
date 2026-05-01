@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const session = await getSession(sessionId)
       ?? (!MOCK_MODE && isAddress(sessionId) ? await getOnchainSmartAccountSession(sessionId as Address) : null);
 
-    if (!session) throw new Error("Create your Persistent Ritual Agent before chatting.");
+    if (!session) throw new Error("Create or load your Ritual Smart Account before chatting.");
     if (!isAddress(session.userWallet)) throw new Error("Connect your wallet before chatting.");
     await checkSmartAccountRateLimit(ip, session.smartAccountAddress, "chat:aa");
 
@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (session.status !== "active") throw new Error("Chat is disabled until the Persistent Agent is active.");
+    if (session.status !== "active") throw new Error("Chat is disabled until setup is active.");
     await validateSessionKey(session);
     await checkRelayerBalance();
 
