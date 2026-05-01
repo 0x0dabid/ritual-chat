@@ -263,6 +263,22 @@ Before production use, finish the app-specific AA adapter in `lib/ritual/smartAc
 
 Real AA deployment is currently adapter-gated. The repo is mock-ready and safe to run locally, but production mode intentionally refuses to pretend that a relayer wallet is the user's smart account. The real provider/factory integration belongs in the `lib/ritual/*` adapter layer.
 
+## Vercel Real Mode
+
+For Vercel, run the app with:
+
+```bash
+MOCK_MODE=false
+NEXT_PUBLIC_MOCK_MODE=false
+AA_PROVIDER=custom
+AA_FACTORY_ADDRESS=0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+```
+
+In real mode, RITUAL CHAT does not use file-based session storage on Vercel. The connected `walletAddress` is the session identity, and the deterministic smart account is derived from the onchain `RitualChatSmartAccountFactory`. Smart Account status is determined by checking code at the predicted smart account address.
+
+File-backed JSON storage remains for mock/local testing only. A database should be added later for chat history and durable session records, not as the source of truth for smart account ownership.
+
 ## Transaction Links
 
 Every assistant response includes:

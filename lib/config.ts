@@ -14,9 +14,13 @@ export const MAX_REQUESTS_PER_IP_PER_DAY = 50;
 export const RITUAL_RPC_URL = process.env.RITUAL_RPC_URL;
 export const RELAYER_PRIVATE_KEY = process.env.RELAYER_PRIVATE_KEY as `0x${string}` | undefined;
 export const DEPLOYER_PRIVATE_KEY = process.env.DEPLOYER_PRIVATE_KEY as `0x${string}` | undefined;
+export const IS_VERCEL = process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV);
+export const USE_FILE_STORAGE = MOCK_MODE || (!IS_VERCEL && process.env.USE_FILE_STORAGE === "true");
 
 export const AA_PROVIDER_KIND = process.env.AA_PROVIDER ?? process.env.AA_PROVIDER_KIND ?? "custom";
-export const AA_FACTORY_ADDRESS = process.env.AA_FACTORY_ADDRESS as `0x${string}` | undefined;
+export const AA_FACTORY_ADDRESS = (
+  process.env.AA_FACTORY_ADDRESS ?? "0x98fb3c3Cb0291E43D138dA1051a7b98Bfa75eda0"
+) as `0x${string}`;
 export const AA_ENTRYPOINT_ADDRESS = process.env.AA_ENTRYPOINT_ADDRESS as `0x${string}` | undefined;
 export const AA_BUNDLER_RPC_URL = process.env.AA_BUNDLER_RPC_URL;
 export const AA_PAYMASTER_RPC_URL = process.env.AA_PAYMASTER_RPC_URL;

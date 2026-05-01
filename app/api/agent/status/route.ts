@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { isAddress } from "viem";
+import { isAddress, type Address } from "viem";
+import { MOCK_MODE, USE_FILE_STORAGE } from "@/lib/config";
+import { getOnchainSmartAccountSession } from "@/lib/ritual/realSession";
 import { getSession, getSessionByWallet, getSessionMessages } from "@/lib/storage";
 
 export async function GET(request: Request) {
@@ -12,6 +14,31 @@ export async function GET(request: Request) {
 
   if (walletAddress && !isAddress(walletAddress)) {
     return NextResponse.json({ error: "Invalid EVM wallet address." }, { status: 400 });
+  }
+
+  if (!MOCK_MODE && walletAddress) {
+    const session = await getOnchainSmartAccountSession(walletAddress as Address);
+    if (!session) {
+      return NextResponse.json({ error: "Smart account not created yet." }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      smartAccountAddress: session.smartAccountAddress,
+      smartAccountStatus: session.smartAccountStatus ?? "active",
+      persistentAgentAddress: session.persistentAgentAddress,
+      persistentAgentStatus: session.persistentAgentStatus ?? session.status,
+      persistentAgentCreateTxHash: session.persistentAgentCreateTxHash,
+      persistentAgentMissingConfig: session.persistentAgentMissingConfig,
+      sessionKeyStatus: session.sessionKeyStatus,
+      sessionStatus: session.status,
+      agentStatus: session.status,
+      session,
+      messages: [],
+    });
+  }
+
+  if (!USE_FILE_STORAGE) {
+    return NextResponse.json({ error: "Session not found." }, { status: 404 });
   }
 
   const session = sessionId
