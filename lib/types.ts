@@ -1,14 +1,21 @@
 export type TxStatus = "pending" | "confirmed" | "failed";
 
 export type AgentStatus = "creating" | "active" | "failed";
+export type IntegrationStatus = "pending" | "creating" | "active" | "failed";
 
 export interface AgentSession {
   id: string;
   userWallet: string;
   smartAccountAddress: string;
   smartAccountDeploymentTxHash?: string;
+  smartAccountStatus?: IntegrationStatus;
   persistentAgentAddress: string;
+  persistentAgentStatus?: IntegrationStatus;
+  persistentAgentCreateTxHash?: string;
+  persistentAgentStatusMessage?: string;
+  persistentAgentMissingConfig?: string[];
   sessionKeyAddress: string;
+  sessionKeyStatus?: IntegrationStatus;
   sessionKeyExpiresAt: string;
   status: AgentStatus;
   explorerLink: string;

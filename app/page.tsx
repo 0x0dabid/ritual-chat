@@ -28,6 +28,7 @@ export default function Home() {
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE !== "false", [agent]);
   const walletAddress = isConnected && address ? address : null;
   const realModePending = Boolean(agent && !agent.mockMode && agent.status !== "active");
+  const persistentConfigMissing = Boolean(agent?.persistentAgentMissingConfig?.length);
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -214,8 +215,15 @@ export default function Home() {
               <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
                 <h2 className="text-lg font-semibold">Next step: Persistent Agent integration</h2>
                 <p className="mt-2 text-sm leading-6 text-black/68">
-                  Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual&apos;s PersistentAgentFactory so it can own a real Persistent Agent.
+                  {persistentConfigMissing
+                    ? "Persistent Agent config is incomplete. Add the required Ritual env vars to enable real agent creation."
+                    : "Your smart account is live on Ritual Testnet. The next milestone is wiring this smart account into Ritual's PersistentAgentFactory so it can own a real Persistent Agent."}
                 </p>
+                {persistentConfigMissing ? (
+                  <p className="mt-3 break-words font-mono text-xs leading-5 text-black/58">
+                    {agent?.persistentAgentMissingConfig?.join(", ")}
+                  </p>
+                ) : null}
               </section>
             ) : null}
             {agent ? <AgentStatusCard session={agent} /> : null}

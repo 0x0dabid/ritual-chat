@@ -162,6 +162,22 @@ Still pending:
 - Ritual LLM transaction flow through the approved account/session-key path
 - full Ritual Testnet verification of the deployed factory
 
+## Persistent Agent Integration Status
+
+The real Persistent Agent adapter lives in `lib/ritual/persistentAgent.ts`.
+
+Current real-mode behavior:
+
+- predicts the user's `PersistentAgentLauncher` from `PersistentAgentFactory.predictLauncher(smartAccountAddress, userSalt)`
+- checks whether launcher bytecode already exists
+- reports missing Persistent Agent configuration without faking an agent address
+- builds the guarded `launchPersistentCompressed` call data once all required env vars are present
+- keeps chat disabled until a real launcher is active and the session path is safe
+
+The backend relayer does not call `PersistentAgentFactory` directly because that would make the relayer the launcher owner/controller. The next step is owner-authorized smart-account execution from the connected wallet.
+
+See `docs/persistent-agent-integration.md` for the confirmed factory methods, required env vars, funding notes, events, and current blocker.
+
 ## Deploy Smart Account Factory to Ritual Testnet
 
 Use a fresh deployer wallet with only testnet funds. Never commit `.env.local`.

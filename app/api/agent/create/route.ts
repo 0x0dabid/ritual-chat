@@ -2,33 +2,10 @@ import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
 import { addressExplorerLink, MOCK_MODE } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkWalletRateLimit } from "@/lib/rateLimit";
-import { createOrLoadPersistentAgent } from "@/lib/ritual/persistentAgent";
+import { createOrLoadPersistentAgent, type PersistentAgentResult } from "@/lib/ritual/persistentAgent";
 import { createOrLoadSmartAccount, createSessionKey } from "@/lib/ritual/smartAccount";
 import { getSession, getSessionByWallet, getSessionMessages, upsertSession } from "@/lib/storage";
 import type { AgentSession } from "@/lib/types";
-
-const pendingRealModeMessage = "Smart Account already active. Persistent Agent integration is pending.";
-
-function isRealSmartAccountPending(session: AgentSession | null | undefined) {
-  return Boolean(session && !session.mockMode && session.smartAccountAddress);
-}
-
-async function realPendingResponse(session: AgentSession) {
-  return NextResponse.json({
-    smartAccountAddress: session.smartAccountAddress,
-    smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
-    persistentAgentAddress: session.persistentAgentAddress,
-    sessionKeyAddress: session.sessionKeyAddress,
-    status: session.status,
-    smartAccountStatus: "active",
-    persistentAgentStatus: "pending",
-    sessionKeyStatus: "pending",
-    message: pendingRealModeMessage,
-    explorerLink: session.explorerLink,
-    session,
-    messages: await getSessionMessages(session.id),
-  });
-}
 
 export async function POST(request: Request) {
   try {
@@ -60,23 +37,18 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!MOCK_MODE && isRealSmartAccountPending(existing)) {
-      return realPendingResponse(existing as AgentSession);
-    }
-
     const smartAccount = await createOrLoadSmartAccount({
       userWallet: walletAddress,
       existing,
     });
     const smartAccountAddress = smartAccount.smartAccountAddress as Address;
 
-    const persistentAgentAddress = MOCK_MODE
-      ? await createOrLoadPersistentAgent({
-        sessionId,
-        smartAccountAddress,
-        existing,
-      }) as Address
-      : "0x0000000000000000000000000000000000000000" as Address;
+    const persistentAgent = await createOrLoadPersistentAgent({
+      sessionId,
+      smartAccountAddress,
+      existing,
+    });
+    const persistentAgentResult = normalizePersistentAgentResult(persistentAgent);
 
     const sessionKey = MOCK_MODE
       ? await createSessionKey({
@@ -94,11 +66,19 @@ export async function POST(request: Request) {
       userWallet: walletAddress,
       smartAccountAddress,
       smartAccountDeploymentTxHash: smartAccount.deploymentTxHash,
-      persistentAgentAddress,
+      smartAccountStatus: "active",
+      persistentAgentAddress: persistentAgentResult.persistentAgentAddress,
+      persistentAgentStatus: persistentAgentResult.persistentAgentStatus,
+      persistentAgentCreateTxHash: persistentAgentResult.persistentAgentCreateTxHash,
+      persistentAgentStatusMessage: persistentAgentResult.persistentAgentStatusMessage,
+      persistentAgentMissingConfig: persistentAgentResult.persistentAgentMissingConfig,
       sessionKeyAddress: sessionKey.sessionKeyAddress,
+      sessionKeyStatus: MOCK_MODE ? "active" : "pending",
       sessionKeyExpiresAt: sessionKey.sessionKeyExpiresAt,
       status: MOCK_MODE ? "active" : "creating",
-      explorerLink: addressExplorerLink(persistentAgentAddress),
+      explorerLink: persistentAgentResult.persistentAgentStatus === "active"
+        ? addressExplorerLink(persistentAgentResult.persistentAgentAddress)
+        : addressExplorerLink(smartAccountAddress),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       mockMode: MOCK_MODE,
@@ -111,12 +91,15 @@ export async function POST(request: Request) {
         smartAccountAddress: session.smartAccountAddress,
         smartAccountDeploymentTxHash: session.smartAccountDeploymentTxHash,
         persistentAgentAddress: session.persistentAgentAddress,
+        persistentAgentCreateTxHash: session.persistentAgentCreateTxHash,
         sessionKeyAddress: session.sessionKeyAddress,
         status: session.status,
         smartAccountStatus: "active",
-        persistentAgentStatus: "pending",
+        persistentAgentStatus: session.persistentAgentStatus ?? "pending",
         sessionKeyStatus: "pending",
-        message: "Smart Account loaded successfully. Persistent Agent integration is pending.",
+        persistentAgentMissingConfig: session.persistentAgentMissingConfig,
+        message: session.persistentAgentStatusMessage
+          ?? "Smart Account loaded successfully. Persistent Agent integration is pending.",
         explorerLink: session.explorerLink,
         session,
         messages: await getSessionMessages(session.id),
@@ -137,4 +120,15 @@ export async function POST(request: Request) {
     const message = err instanceof Error ? err.message : "Something went wrong while creating your Ritual agent. Please try again.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+function normalizePersistentAgentResult(value: Address | PersistentAgentResult): PersistentAgentResult {
+  if (typeof value === "string") {
+    return {
+      persistentAgentAddress: value,
+      persistentAgentStatus: "active",
+    };
+  }
+
+  return value;
 }

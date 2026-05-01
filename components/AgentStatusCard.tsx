@@ -21,6 +21,8 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
   const agentIsActive = session.status === "active";
   const hasPersistentAgent = session.persistentAgentAddress !== "0x0000000000000000000000000000000000000000";
   const hasSessionKey = session.sessionKeyAddress !== "0x0000000000000000000000000000000000000000";
+  const persistentAgentStatus = session.persistentAgentStatus ?? (hasPersistentAgent ? "active" : "pending");
+  const sessionKeyStatus = session.sessionKeyStatus ?? (hasSessionKey ? "active" : "pending");
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -37,12 +39,32 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
           label="Persistent Agent"
           value={hasPersistentAgent
             ? <span title={session.persistentAgentAddress}>{compact(session.persistentAgentAddress)}</span>
-            : "Pending Ritual integration"}
+            : persistentAgentStatus === "failed"
+              ? "Failed"
+              : persistentAgentStatus === "creating"
+                ? "Creating"
+                : "Pending Ritual integration"}
         />
+        <Row label="Persistent Agent Status" value={persistentAgentStatus[0].toUpperCase() + persistentAgentStatus.slice(1)} />
+        {session.persistentAgentCreateTxHash ? (
+          <Row
+            label="Persistent Agent Create TX"
+            value={(
+              <a
+                className="text-ritual-green underline-offset-4 hover:underline"
+                href={`https://explorer.ritualfoundation.org/tx/${session.persistentAgentCreateTxHash}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {compact(session.persistentAgentCreateTxHash)}
+              </a>
+            )}
+          />
+        ) : null}
         <Row label="Agent Type" value="Persistent Agent" />
         <Row label="Owner" value="User AA Smart Account" />
         <Row label="Network" value="Ritual Testnet" />
-        <Row label="Session Key" value={hasSessionKey ? "Active" : "Pending owner authorization"} />
+        <Row label="Session Key" value={sessionKeyStatus === "active" ? "Active" : "Pending owner authorization"} />
         <Row label="Session" value={agentIsActive ? "Active" : "Pending"} />
         <Row label="Chat" value={agentIsActive ? "Enabled" : "Disabled until agent is active"} />
         <Row label="Gas" value="Sponsored / Relayed on Testnet" />
@@ -60,6 +82,14 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
           )}
         />
       </div>
+      {session.persistentAgentMissingConfig?.length ? (
+        <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
+          Persistent Agent config is incomplete. Add the required Ritual env vars to enable real agent creation.
+          <span className="mt-2 block break-words font-mono text-xs text-black/58">
+            {session.persistentAgentMissingConfig.join(", ")}
+          </span>
+        </div>
+      ) : null}
     </section>
   );
 }

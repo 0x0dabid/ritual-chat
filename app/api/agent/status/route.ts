@@ -23,7 +23,12 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     smartAccountAddress: session.smartAccountAddress,
+    smartAccountStatus: session.smartAccountStatus ?? "active",
     persistentAgentAddress: session.persistentAgentAddress,
+    persistentAgentStatus: session.persistentAgentStatus ?? session.status,
+    persistentAgentCreateTxHash: session.persistentAgentCreateTxHash,
+    persistentAgentMissingConfig: session.persistentAgentMissingConfig,
+    sessionKeyStatus: session.sessionKeyStatus,
     sessionStatus: session.status,
     agentStatus: session.status,
     session,
