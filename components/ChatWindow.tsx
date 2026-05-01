@@ -5,11 +5,12 @@ import { ChatMessage } from "@/components/ChatMessage";
 interface ChatWindowProps {
   disabled: boolean;
   disabledMessage?: string;
+  isSubmittingTx: boolean;
   messages: ChatMessageType[];
   onSend: (prompt: string) => Promise<void>;
 }
 
-export function ChatWindow({ disabled, disabledMessage, messages, onSend }: ChatWindowProps) {
+export function ChatWindow({ disabled, disabledMessage, isSubmittingTx, messages, onSend }: ChatWindowProps) {
   return (
     <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-ritual-green/20 bg-ritual-card shadow-soft">
       <div className="border-b border-ritual-green/15 px-5 py-4">
@@ -32,7 +33,7 @@ export function ChatWindow({ disabled, disabledMessage, messages, onSend }: Chat
           messages.map((message) => <ChatMessage key={message.id} message={message} />)
         )}
       </div>
-      <ChatInput disabled={disabled} onSend={onSend} />
+      <ChatInput disabled={disabled} isSubmittingTx={isSubmittingTx} onSend={onSend} />
     </section>
   );
 }

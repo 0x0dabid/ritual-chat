@@ -299,6 +299,27 @@ npm run contracts:deploy:chat
 
 If `CHAT_MANAGER_ADDRESS` is already deployed, call `refreshLlmWalletLock()` on that manager with testnet RITUAL value. Use a fresh deployer wallet with only testnet funds.
 
+### Wallet nonce / replacement transaction errors
+
+Errors such as:
+
+```text
+replacement transaction underpriced
+nonce too low
+already known
+transaction underpriced
+```
+
+usually mean the wallet has a pending or stuck transaction using the same nonce, or the browser/wallet tried to submit the same chat transaction more than once. The frontend disables the chat input while a wallet transaction is pending and only calls the wallet once per chat message, but wallet-side pending nonce state can still survive page refreshes.
+
+Fix:
+
+- Open the wallet activity queue and wait for, speed up, or cancel the pending transaction.
+- If the wallet still shows stale nonce data, clear activity/nonce data in the wallet settings.
+- Refresh RITUAL CHAT and send the message again.
+
+The UI shows a friendly nonce warning for these errors and keeps raw wallet/RPC details in console logs only.
+
 ### Official DeepSeek API Status
 
 The official DeepSeek API is OpenAI-compatible, but the current Ritual Persistent Agent payload documented in `ritual-dapp-skills` does not expose a custom OpenAI-compatible base URL field. The adapter therefore does not use `PERSISTENT_AGENT_LLM_BASE_URL` yet.

@@ -26,6 +26,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean | null>(null);
+  const [isSubmittingTx, setIsSubmittingTx] = useState(false);
 
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE === "true", [agent]);
   const walletAddress = isConnected && address ? address : null;
@@ -151,6 +152,8 @@ export default function Home() {
 
   async function sendMessage(prompt: string) {
     if (!agent) return;
+    if (isSubmittingTx) return;
+    setIsSubmittingTx(true);
     setError(null);
 
     const userMessage: ChatMessage = {
@@ -196,7 +199,10 @@ export default function Home() {
       setMessages((current) => [...current, data.message]);
       pollTx(data.message.txHash);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Ritual LLM response failed. Please try again.");
+      console.error("Ritual chat transaction failed", err);
+      setError(formatChatTransactionError(err));
+    } finally {
+      setIsSubmittingTx(false);
     }
   }
 
@@ -272,6 +278,7 @@ export default function Home() {
           <ChatWindow
             disabled={!chatReady}
             disabledMessage={chatDisabledMessage}
+            isSubmittingTx={isSubmittingTx}
             messages={messages}
             onSend={sendMessage}
           />
@@ -280,4 +287,32 @@ export default function Home() {
       <Footer />
     </main>
   );
+}
+
+function formatChatTransactionError(err: unknown) {
+  const message = collectErrorText(err).toLowerCase();
+  if (
+    message.includes("replacement transaction underpriced")
+    || message.includes("nonce too low")
+    || message.includes("already known")
+    || message.includes("transaction underpriced")
+  ) {
+    return "Your wallet has a stuck nonce or duplicate transaction. Clear activity/nonce data in your wallet, refresh, and try again.";
+  }
+
+  if (err instanceof Error) return err.message;
+  return "Ritual LLM response failed. Please try again.";
+}
+
+function collectErrorText(err: unknown) {
+  if (!err || typeof err !== "object") return String(err ?? "");
+
+  const record = err as Record<string, unknown>;
+  return [
+    record.message,
+    record.shortMessage,
+    record.details,
+    record.cause,
+  ].map((value) => typeof value === "string" ? value : "")
+    .join(" ");
 }
