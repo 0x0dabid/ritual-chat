@@ -261,14 +261,15 @@ export default function Home() {
         transport: http(ritualTestnet.rpcUrls.default.http[0]),
       });
       const gas = await estimateBufferedGas(account.address, txRequest);
-      const gasPrice = await ritualPublicClient.getGasPrice();
-      assertNativeGasBalance(balances.nativeWei, gas * gasPrice + BigInt(txRequest.value ?? "0"), "session wallet");
+      const fees = await getEip1559Fees();
+      assertNativeGasBalance(balances.nativeWei, gas * fees.maxFeePerGas + BigInt(txRequest.value ?? "0"), "session wallet");
       return client.sendTransaction({
         to: txRequest.to,
         data: txRequest.data,
         value: BigInt(txRequest.value ?? "0"),
         gas,
-        gasPrice,
+        maxFeePerGas: fees.maxFeePerGas,
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
       });
     }
 
@@ -280,14 +281,15 @@ export default function Home() {
     setConnectedBalances(balances);
     assertSenderReadyForLlm(balances, "connected wallet");
     const gas = await estimateBufferedGas(walletClient.account.address, txRequest);
-    const gasPrice = await ritualPublicClient.getGasPrice();
-    assertNativeGasBalance(balances.nativeWei, gas * gasPrice + BigInt(txRequest.value ?? "0"), "connected wallet");
+    const fees = await getEip1559Fees();
+    assertNativeGasBalance(balances.nativeWei, gas * fees.maxFeePerGas + BigInt(txRequest.value ?? "0"), "connected wallet");
     return walletClient.sendTransaction({
       to: txRequest.to,
       data: txRequest.data,
       value: BigInt(txRequest.value ?? "0"),
       gas,
-      gasPrice,
+      maxFeePerGas: fees.maxFeePerGas,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
     });
   }
 
@@ -449,6 +451,15 @@ export default function Home() {
       value: BigInt(txRequest.value ?? "0"),
     });
     return estimate + estimate / 5n + 25_000n;
+  }
+
+  async function getEip1559Fees() {
+    const gasPrice = await ritualPublicClient.getGasPrice();
+    const maxPriorityFeePerGas = gasPrice / 10n > 0n ? gasPrice / 10n : 1n;
+    return {
+      maxFeePerGas: gasPrice * 2n,
+      maxPriorityFeePerGas,
+    };
   }
 
   function assertSenderReadyForLlm(balances: WalletBalances, label: string) {
