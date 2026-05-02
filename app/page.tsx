@@ -151,6 +151,13 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletAddress, sessionWalletAddress]);
 
+  useEffect(() => {
+    if (!walletAddress || activeSender !== "session" || !connectedBalances) return;
+    if (isSenderReadyForLlm(connectedBalances) && (!sessionBalances || !isSenderReadyForLlm(sessionBalances))) {
+      setActiveSender("wallet");
+    }
+  }, [activeSender, connectedBalances, sessionBalances, walletAddress]);
+
   async function connectWallet() {
     setError(null);
     setNotice(null);
