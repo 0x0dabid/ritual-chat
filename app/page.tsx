@@ -260,11 +260,15 @@ export default function Home() {
         chain: ritualTestnet,
         transport: http(ritualTestnet.rpcUrls.default.http[0]),
       });
+      const gas = await estimateBufferedGas(account.address, txRequest);
+      const gasPrice = await ritualPublicClient.getGasPrice();
+      assertNativeGasBalance(balances.nativeWei, gas * gasPrice + BigInt(txRequest.value ?? "0"), "session wallet");
       return client.sendTransaction({
         to: txRequest.to,
         data: txRequest.data,
         value: BigInt(txRequest.value ?? "0"),
-        gas: 6_000_000n,
+        gas,
+        gasPrice,
       });
     }
 
@@ -275,11 +279,15 @@ export default function Home() {
     const balances = await loadWalletBalances(walletClient.account.address);
     setConnectedBalances(balances);
     assertSenderReadyForLlm(balances, "connected wallet");
+    const gas = await estimateBufferedGas(walletClient.account.address, txRequest);
+    const gasPrice = await ritualPublicClient.getGasPrice();
+    assertNativeGasBalance(balances.nativeWei, gas * gasPrice + BigInt(txRequest.value ?? "0"), "connected wallet");
     return walletClient.sendTransaction({
       to: txRequest.to,
       data: txRequest.data,
       value: BigInt(txRequest.value ?? "0"),
-      gas: 6_000_000n,
+      gas,
+      gasPrice,
     });
   }
 
@@ -433,6 +441,16 @@ export default function Home() {
     return { nativeWei, ritualWalletWei, ritualWalletLockUntil, currentBlock };
   }
 
+  async function estimateBufferedGas(account: Address, txRequest: { to: Address; data: Hex; value?: string }) {
+    const estimate = await ritualPublicClient.estimateGas({
+      account,
+      to: txRequest.to,
+      data: txRequest.data,
+      value: BigInt(txRequest.value ?? "0"),
+    });
+    return estimate + estimate / 5n + 25_000n;
+  }
+
   function assertSenderReadyForLlm(balances: WalletBalances, label: string) {
     if (balances.nativeWei <= 0n) {
       throw new Error(`The ${label} needs native Ritual testnet gas before chatting.`);
@@ -442,6 +460,12 @@ export default function Home() {
     }
     if (balances.ritualWalletLockUntil <= balances.currentBlock) {
       throw new Error(`The ${label} RitualWallet deposit is not locked. Deposit any amount before chatting.`);
+    }
+  }
+
+  function assertNativeGasBalance(balance: bigint, required: bigint, label: string) {
+    if (balance < required) {
+      throw new Error(`The ${label} needs more native RITUAL for gas. Required about ${formatBalance(required)}, available ${formatBalance(balance)}.`);
     }
   }
 
@@ -675,6 +699,9 @@ function formatChatTransactionError(err: unknown) {
   const message = collectErrorText(err).toLowerCase();
   if (message.includes("insufficient wallet balance") || message.includes("ritualwallet deposit")) {
     return "The active chat sender needs a RitualWallet deposit before chatting. Deposit any amount, then try again.";
+  }
+  if (message.includes("insufficient funds for gas") || message.includes("exceeds the balance of the account")) {
+    return "The active chat sender needs more native RITUAL for gas before chatting.";
   }
   if (
     message.includes("replacement transaction underpriced")
