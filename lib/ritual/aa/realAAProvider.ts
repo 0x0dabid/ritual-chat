@@ -1,5 +1,6 @@
 import { createWalletClient, encodeFunctionData, http, isAddress, parseAbi, type Address } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { ethers } from "ethers";
 import {
   AA_BUNDLER_RPC_URL,
   AA_ENTRYPOINT_ADDRESS,
@@ -153,7 +154,7 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
     if (!isAddress(sessionKeyAddress)) return false;
     if (!smartAccountAddress || !isAddress(smartAccountAddress)) return false;
 
-    const [storedSessionKey, expiresAt, valid] = await Promise.all([
+    const [storedSessionKey, expiresAt, valid, latestBlock] = await Promise.all([
       getPublicClient().readContract({
         address: smartAccountAddress,
         abi: ritualChatSmartAccountAbi,
@@ -170,11 +171,12 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
         functionName: "isValidSessionKey",
         args: [sessionKeyAddress],
       }),
+      getPublicClient().getBlock(),
     ]);
 
     return valid
       && storedSessionKey.toLowerCase() === sessionKeyAddress.toLowerCase()
-      && Number(expiresAt) > Math.floor(Date.now() / 1000);
+      && expiresAt > latestBlock.timestamp;
   }
 
   async buildUserOperationOrTx(request: UserOperationOrTxRequest): Promise<UserOperationOrTx> {
@@ -193,17 +195,16 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
       throw new Error("RPC unavailable. Set RITUAL_RPC_URL to submit chat transactions.");
     }
 
-    const walletClient = createWalletClient({
-      account,
-      chain: ritualChain,
-      transport: http(RITUAL_RPC_URL),
-    });
+    const provider = new ethers.JsonRpcProvider(RITUAL_RPC_URL, Number(ritualChain.id));
+    const signer = new ethers.Wallet(RELAYER_PRIVATE_KEY!, provider);
+    const gasPrice = await getPublicClient().getGasPrice();
 
-    const txHash = await walletClient.sendTransaction({
+    const tx = await signer.sendTransaction({
       to: request.to,
       data: request.data,
-      value: 0n,
-      gas: 6_000_000n,
+      value: 0,
+      gasLimit: 6_000_000n,
+      gasPrice: gasPrice * 2n,
     });
 
     return {
@@ -213,7 +214,7 @@ export class RealAAProviderAdapter implements AAProviderAdapter {
       data: request.data,
       value: 0n,
       description: "Session-key chat transaction through RitualChatSmartAccount.executeChatCall.",
-      txHash,
+      txHash: tx.hash as `0x${string}`,
     };
   }
 
@@ -258,7 +259,7 @@ export async function getSmartAccountSessionKeyState(params: {
   smartAccountAddress: Address;
   expectedSessionKeyAddress: Address;
 }) {
-  const [storedSessionKey, expiresAt, valid] = await Promise.all([
+  const [storedSessionKey, expiresAt, valid, latestBlock] = await Promise.all([
     getPublicClient().readContract({
       address: params.smartAccountAddress,
       abi: ritualChatSmartAccountAbi,
@@ -275,19 +276,24 @@ export async function getSmartAccountSessionKeyState(params: {
       functionName: "isValidSessionKey",
       args: [params.expectedSessionKeyAddress],
     }),
+    getPublicClient().getBlock(),
   ]);
 
   const zeroAddress = "0x0000000000000000000000000000000000000000";
   const matchesExpected = storedSessionKey.toLowerCase() === params.expectedSessionKeyAddress.toLowerCase();
-  const expiresAtSeconds = Number(expiresAt);
-  const isExpired = matchesExpected && expiresAtSeconds > 0 && expiresAtSeconds <= Math.floor(Date.now() / 1000);
+  const isExpired = matchesExpected && expiresAt > 0n && expiresAt <= latestBlock.timestamp;
 
   return {
     storedSessionKey,
     sessionKeyAddress: matchesExpected ? storedSessionKey : zeroAddress,
-    sessionKeyExpiresAt: expiresAtSeconds > 0 ? new Date(expiresAtSeconds * 1000).toISOString() : null,
+    sessionKeyExpiresAt: expiresAt > 0n ? chainTimestampToDate(expiresAt).toISOString() : null,
     sessionKeyStatus: valid && matchesExpected ? "active" as const : isExpired ? "expired" as const : "pending" as const,
   };
+}
+
+function chainTimestampToDate(timestamp: bigint) {
+  const value = Number(timestamp);
+  return new Date(value > 1_000_000_000_000 ? value : value * 1000);
 }
 
 export async function isChatTargetApproved(target: Address) {

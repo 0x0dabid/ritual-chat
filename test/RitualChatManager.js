@@ -59,7 +59,26 @@ describe("RitualChatManager", () => {
       .to.emit(manager, "ChatResponseReceived");
   });
 
-  it("rejects missing convoHistory config", async () => {
+  it("allows no-history config for simple v1 chat", async () => {
+    const [executor] = await ethers.getSigners();
+    const Manager = await ethers.getContractFactory("RitualChatManager");
+
+    const manager = await Manager.deploy(
+      LLM_PRECOMPILE,
+      executor.address,
+      MODEL,
+      TTL,
+      TEMPERATURE,
+      ["", "", ""],
+    );
+    await manager.waitForDeployment();
+    const history = await manager.convoHistory();
+    expect(history.platform).to.equal("");
+    expect(history.path).to.equal("");
+    expect(history.keyRef).to.equal("");
+  });
+
+  it("rejects partial convoHistory config", async () => {
     const [executor] = await ethers.getSigners();
     const Manager = await ethers.getContractFactory("RitualChatManager");
 
@@ -69,7 +88,7 @@ describe("RitualChatManager", () => {
       MODEL,
       TTL,
       TEMPERATURE,
-      ["", "", ""],
+      ["hf", "", ""],
     )).to.be.revertedWithCustomError(Manager, "InvalidLlmConfig");
   });
 

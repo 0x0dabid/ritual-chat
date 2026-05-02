@@ -323,13 +323,21 @@ export default function Home() {
 
   async function pollTx(txHash?: string): Promise<"confirmed" | "failed" | "pending"> {
     if (!txHash) return "pending";
-    for (let attempt = 0; attempt < 8; attempt += 1) {
-      await new Promise((resolve) => window.setTimeout(resolve, 1800));
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 2500));
       const response = await fetch(`/api/tx/status?hash=${encodeURIComponent(txHash)}`);
       if (!response.ok) continue;
       const data = await response.json();
       setMessages((current) => current.map((message) => (
-        message.txHash === txHash ? { ...message, txStatus: data.status } : message
+        message.txHash === txHash
+          ? {
+              ...message,
+              txStatus: data.status,
+              content: data.assistantResponse && message.role === "assistant"
+                ? data.assistantResponse
+                : message.content,
+            }
+          : message
       )));
       if (data.status === "confirmed" || data.status === "failed") return data.status;
     }

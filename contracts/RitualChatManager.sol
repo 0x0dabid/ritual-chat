@@ -51,13 +51,16 @@ contract RitualChatManager is PrecompileConsumer {
         StorageRef memory convoHistory_
     ) {
         if (llmPrecompile_ == address(0) || executor_ == address(0)) revert InvalidAddress();
-        if (
-            ttl_ == 0
-                || bytes(model_).length == 0
-                || bytes(convoHistory_.platform).length == 0
-                || bytes(convoHistory_.path).length == 0
-                || bytes(convoHistory_.keyRef).length == 0
-        ) {
+        if (ttl_ == 0 || bytes(model_).length == 0) {
+            revert InvalidLlmConfig();
+        }
+        bool hasAnyConvoHistory = bytes(convoHistory_.platform).length > 0
+            || bytes(convoHistory_.path).length > 0
+            || bytes(convoHistory_.keyRef).length > 0;
+        bool hasCompleteConvoHistory = bytes(convoHistory_.platform).length > 0
+            && bytes(convoHistory_.path).length > 0
+            && bytes(convoHistory_.keyRef).length > 0;
+        if (hasAnyConvoHistory && !hasCompleteConvoHistory) {
             revert InvalidLlmConfig();
         }
 
@@ -81,18 +84,27 @@ contract RitualChatManager is PrecompileConsumer {
         emit ChatPromptSubmitted(msg.sender, msg.sender, prompt);
 
         bytes memory result = _executePrecompile(llmPrecompile, _buildLlmInput(prompt));
+        (, bytes memory actualOutput) = abi.decode(result, (bytes, bytes));
+        if (actualOutput.length == 0) {
+            bytes memory pendingOutput = bytes("Response pending on Ritual Testnet.");
+            emit ChatResponseReceived(msg.sender, pendingOutput, bytes(""), _convoHistory);
+            return pendingOutput;
+        }
+
         (
             bool hasError,
             bytes memory responseCompletionData,
             bytes memory modelMetadata,
             string memory errorMessage,
             StorageRef memory updatedConvoHistory
-        ) = abi.decode(result, (bool, bytes, bytes, string, StorageRef));
+        ) = abi.decode(actualOutput, (bool, bytes, bytes, string, StorageRef));
 
-        if (hasError) revert LlmResponseError(errorMessage);
+        bytes memory output = hasError && responseCompletionData.length == 0
+            ? bytes(errorMessage)
+            : responseCompletionData;
 
-        emit ChatResponseReceived(msg.sender, responseCompletionData, modelMetadata, updatedConvoHistory);
-        return responseCompletionData;
+        emit ChatResponseReceived(msg.sender, output, modelMetadata, updatedConvoHistory);
+        return output;
     }
 
     function previewLlmInput(string calldata prompt) external view returns (bytes memory) {

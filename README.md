@@ -62,11 +62,14 @@ AA_FACTORY_ADDRESS=
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0802
 RITUAL_LLM_EXECUTOR_ADDRESS=
 RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
-RITUAL_LLM_TTL=30
+RITUAL_LLM_TTL=300
 RITUAL_LLM_TEMPERATURE=700
+RITUAL_LLM_CONVO_HISTORY_ENABLED=false
 RITUAL_LLM_CONVO_HISTORY_PROVIDER=
 RITUAL_LLM_CONVO_HISTORY_PATH=
 RITUAL_LLM_CONVO_HISTORY_KEY_REF=
+RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+RITUAL_LLM_LOCK_DURATION=50000
 CHAT_MANAGER_ADDRESS=
 
 MIN_SMART_ACCOUNT_BALANCE_WEI=1000000000000000
@@ -117,7 +120,7 @@ Set the printed:
 AA_FACTORY_ADDRESS=0x...
 ```
 
-Deploy the chat manager after setting the LLM executor and conversation history config:
+Deploy the chat manager after setting the LLM executor:
 
 ```bash
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
@@ -125,11 +128,11 @@ DEPLOYER_PRIVATE_KEY=0x...
 AA_FACTORY_ADDRESS=0x...
 RITUAL_LLM_EXECUTOR_ADDRESS=0x...
 RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
-RITUAL_LLM_TTL=30
+RITUAL_LLM_TTL=300
 RITUAL_LLM_TEMPERATURE=700
-RITUAL_LLM_CONVO_HISTORY_PROVIDER=gcs
-RITUAL_LLM_CONVO_HISTORY_PATH=ritual-chat/conversations/session.jsonl
-RITUAL_LLM_CONVO_HISTORY_KEY_REF=GCS_CREDS
+RITUAL_LLM_CONVO_HISTORY_ENABLED=false
+RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
+RITUAL_LLM_LOCK_DURATION=50000
 npm run contracts:deploy:chat
 ```
 
@@ -139,7 +142,10 @@ The deploy script prints:
 CHAT_MANAGER_ADDRESS=0x...
 ```
 
-It also allowlists `CHAT_MANAGER_ADDRESS` on the factory when the deployer owns the factory.
+It also funds the ChatManager and session executor in RitualWallet when `RITUAL_LLM_WALLET_FUNDING_WEI` is set, and
+allowlists `CHAT_MANAGER_ADDRESS` on the factory when the deployer owns the factory. Conversation history is disabled
+by default for simple public v1 chat; set `RITUAL_LLM_CONVO_HISTORY_ENABLED=true` only when real DA credentials are
+configured.
 
 ## Run Locally
 

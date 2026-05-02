@@ -224,11 +224,12 @@ function mapSessionAuthorizationSimulationError(err: unknown) {
 
 async function getChainSessionKeyExpiry(publicClient: ReturnType<typeof getPublicClient>) {
   const latestBlock = await publicClient.getBlock();
-  const ttlSeconds = BigInt(Math.ceil(SESSION_KEY_TTL_HOURS * 60 * 60));
-  const expiresAtSeconds = latestBlock.timestamp + ttlSeconds;
+  const chainUsesMilliseconds = latestBlock.timestamp > 1_000_000_000_000n;
+  const ttlChainUnits = BigInt(Math.ceil(SESSION_KEY_TTL_HOURS * 60 * 60)) * (chainUsesMilliseconds ? 1000n : 1n);
+  const expiresAtSeconds = latestBlock.timestamp + ttlChainUnits;
   return {
     expiresAtSeconds,
-    expiry: new Date(Number(expiresAtSeconds) * 1000),
+    expiry: new Date(Number(expiresAtSeconds) * (chainUsesMilliseconds ? 1 : 1000)),
   };
 }
 
