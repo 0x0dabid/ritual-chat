@@ -29,6 +29,10 @@ const LEGACY_SESSION_WALLET_KEY = "ritual-chat-session-wallet-key";
 const SESSION_WALLET_ENCRYPTED_KEY = "ritual-chat-session-wallet-encrypted-key";
 const SESSION_WALLET_CRYPTO_KEY = "ritual-chat-local-crypto-key";
 const RITUAL_WALLET_ADDRESS = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
+// Ritual's GLM LLM path locks worst-case escrow by registered maxSeqLen,
+// not by prompt size or maxCompletionTokens. Current docs quote ~0.31 RITUAL
+// per in-flight GLM call, so require a small headroom buffer client-side.
+const MIN_LLM_RITUAL_WALLET_ESCROW_WEI = parseEther("0.32");
 const ritualWalletAbi = parseAbi([
   "function deposit(uint256 lockDuration) payable",
   "function withdraw(uint256 amount)",
@@ -63,7 +67,7 @@ export default function Home() {
   const [isSubmittingTx, setIsSubmittingTx] = useState(false);
   const [sessionWalletKey, setSessionWalletKey] = useState<Hex | null>(null);
   const [activeSender, setActiveSender] = useState<"wallet" | "session">("wallet");
-  const [ritualWalletAmount, setRitualWalletAmount] = useState("0.01");
+  const [ritualWalletAmount, setRitualWalletAmount] = useState("0.35");
   const [sessionWalletAmount, setSessionWalletAmount] = useState("0.01");
   const [walletActionPending, setWalletActionPending] = useState(false);
   const [connectedBalances, setConnectedBalances] = useState<WalletBalances | null>(null);
@@ -75,10 +79,15 @@ export default function Home() {
     sessionWalletKey ? privateKeyToAccount(sessionWalletKey).address : null
   ), [sessionWalletKey]);
   const realModePending = false;
-  const chatReady = Boolean(agent && agent.status === "active" && agent.chatStatus === "ready");
-  const chatDisabledMessage = agent?.chatStatus === "missing-chat-manager"
-    ? "ChatManager is not configured yet."
-    : undefined;
+  const activeBalances = activeSender === "session" ? sessionBalances : connectedBalances;
+  const activeSenderHasLlmEscrow = Boolean(activeBalances && isSenderReadyForLlm(activeBalances));
+  const chatReady = Boolean(
+    agent
+      && agent.status === "active"
+      && agent.chatStatus === "ready"
+      && activeSenderHasLlmEscrow,
+  );
+  const chatDisabledMessage = getChatDisabledMessage(agent, activeSender, sessionWalletAddress, activeBalances);
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -469,6 +478,9 @@ export default function Home() {
     if (balances.ritualWalletWei <= 0n) {
       throw new Error(`The ${label} needs a RitualWallet deposit before chatting.`);
     }
+    if (balances.ritualWalletWei < MIN_LLM_RITUAL_WALLET_ESCROW_WEI) {
+      throw new Error(`The ${label} needs more RitualWallet balance for this LLM request. Required about ${formatBalance(MIN_LLM_RITUAL_WALLET_ESCROW_WEI)}, available ${formatBalance(balances.ritualWalletWei)}.`);
+    }
     if (balances.ritualWalletLockUntil <= balances.currentBlock) {
       throw new Error(`The ${label} RitualWallet deposit is not locked. Deposit any amount before chatting.`);
     }
@@ -626,6 +638,32 @@ function formatLock(balances: WalletBalances | null) {
   return balances.ritualWalletLockUntil > balances.currentBlock
     ? `Locked until ${balances.ritualWalletLockUntil.toString()}`
     : "Not locked";
+}
+
+function isSenderReadyForLlm(balances: WalletBalances) {
+  return balances.nativeWei > 0n
+    && balances.ritualWalletWei >= MIN_LLM_RITUAL_WALLET_ESCROW_WEI
+    && balances.ritualWalletLockUntil > balances.currentBlock;
+}
+
+function getChatDisabledMessage(
+  agent: AgentSession | null,
+  activeSender: "wallet" | "session",
+  sessionWalletAddress: Address | null,
+  balances: WalletBalances | null,
+) {
+  if (!agent) return undefined;
+  if (agent.chatStatus === "missing-chat-manager") return "ChatManager is not configured yet.";
+  if (activeSender === "session" && !sessionWalletAddress) return "Create a session wallet before using session chat.";
+  if (!balances) return "Loading active sender balances.";
+  if (balances.nativeWei <= 0n) return "The active chat sender needs native Ritual testnet gas before chatting.";
+  if (balances.ritualWalletWei < MIN_LLM_RITUAL_WALLET_ESCROW_WEI) {
+    return `Deposit at least ${formatBalance(MIN_LLM_RITUAL_WALLET_ESCROW_WEI)} in RitualWallet for the active sender before chatting.`;
+  }
+  if (balances.ritualWalletLockUntil <= balances.currentBlock) {
+    return "The active chat sender RitualWallet deposit is not locked. Deposit before chatting.";
+  }
+  return undefined;
 }
 
 async function loadStoredSessionWallet() {

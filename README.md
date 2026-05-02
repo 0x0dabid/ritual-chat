@@ -162,6 +162,7 @@ Set `CHAT_MANAGER_ADDRESS` after deploying `RitualChatManager`.
 ### RitualWallet deposit needed
 
 Use the in-app RitualWallet deposit controls for MetaMask or the generated session wallet.
+Ritual's current live text model, `zai-org/GLM-4.7-FP8`, locks worst-case escrow from the model registry max sequence length, not from prompt length or `RITUAL_LLM_MAX_COMPLETION_TOKENS`. The practical requirement is about `0.31 RITUAL` per in-flight LLM request, so the app defaults the RitualWallet deposit amount to `0.35 RITUAL` for headroom.
 
 ### Insufficient lock duration
 
