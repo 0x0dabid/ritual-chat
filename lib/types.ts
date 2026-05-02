@@ -2,7 +2,7 @@ export type TxStatus = "pending" | "confirmed" | "failed";
 
 export type AgentStatus = "creating" | "active" | "failed";
 export type IntegrationStatus = "pending" | "creating" | "active" | "failed" | "advanced-pending" | "expired";
-export type ChatStatus = "ready" | "missing-chat-manager" | "pending" | "needs-funding" | "needs-session-key" | "target-not-approved";
+export type ChatStatus = "ready" | "missing-chat-manager" | "missing-relayer" | "pending" | "needs-funding" | "needs-session-key" | "target-not-approved";
 
 export interface AgentSession {
   id: string;

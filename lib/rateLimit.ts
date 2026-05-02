@@ -2,7 +2,7 @@ import {
   MAX_CHAT_MESSAGES_PER_AA_PER_DAY,
   MAX_REQUESTS_PER_IP_PER_DAY,
 } from "@/lib/config";
-import { countMessagesForSmartAccountToday, incrementRateLimit } from "@/lib/storage";
+import { countMessagesForSmartAccountToday, countMessagesForWalletToday, incrementRateLimit } from "@/lib/storage";
 
 export async function checkIpRateLimit(ip: string, requestType: string) {
   const count = await incrementRateLimit({ ip, requestType });
@@ -25,6 +25,18 @@ export async function checkSmartAccountRateLimit(ip: string, smartAccountAddress
   }
 
   const count = await incrementRateLimit({ ip, smartAccountAddress, requestType });
+  if (count > MAX_REQUESTS_PER_IP_PER_DAY) {
+    throw new Error("You've reached the public test limit for today.");
+  }
+}
+
+export async function checkWalletChatRateLimit(ip: string, wallet: string, requestType: string) {
+  const dailyMessages = await countMessagesForWalletToday(wallet);
+  if (dailyMessages >= MAX_CHAT_MESSAGES_PER_AA_PER_DAY) {
+    throw new Error("You've reached the public test limit for today.");
+  }
+
+  const count = await incrementRateLimit({ ip, wallet, requestType });
   if (count > MAX_REQUESTS_PER_IP_PER_DAY) {
     throw new Error("You've reached the public test limit for today.");
   }

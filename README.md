@@ -6,8 +6,7 @@ The current scope is intentionally narrow:
 
 ```text
 connected wallet
--> permanent Ritual Chat Smart Account
--> limited chat session key
+-> server relayer
 -> RitualChatManager
 -> Ritual LLM precompile 0x0802
 -> real Ritual Testnet transaction hash
@@ -18,24 +17,18 @@ The app does not include media chat, image generation, file upload, voice chat, 
 ## Public v1 Flow
 
 1. Connect an EVM wallet.
-2. Create or load the user's deterministic Ritual Chat Smart Account.
-3. Fund the smart account with a small amount of testnet RITUAL.
-4. Authorize the limited chat session key once.
-5. Send text prompts without wallet popups per message.
-6. See a real Ritual Testnet transaction hash for each chat submission.
+2. Use the connected wallet address as the user's public identity.
+3. Send text prompts without wallet popups per message.
+4. The backend relayer submits `RitualChatManager.sendChatMessage(prompt)`.
+5. See a real Ritual Testnet transaction hash for each chat submission.
 
-The connected wallet is used for setup and authorization. Chat messages are submitted by the backend session executor through the authorized smart-account chat path.
+Wallet is used for identity only. Chat transactions are submitted by the server relayer to RitualChatManager.
 
 ## Security Model
 
-- One deterministic smart account per connected wallet.
-- The backend does not own user smart accounts.
 - The browser never sends arbitrary target addresses or calldata for chat.
-- The chat API builds only `smartAccount.executeChatCall(CHAT_MANAGER_ADDRESS, sendChatMessage(prompt))`.
-- The session key can call `executeChatCall` only while valid.
-- `executeChatCall` only reaches targets approved by `RitualChatSmartAccountFactory`.
-- The session key cannot call `executeOwnerCall`.
-- The session key cannot approve targets, change ownership, or submit arbitrary calls.
+- The chat API builds only `RitualChatManager.sendChatMessage(prompt)` server-side.
+- The backend relayer sends only to the configured `CHAT_MANAGER_ADDRESS`.
 - `RELAYER_PRIVATE_KEY` and `DEPLOYER_PRIVATE_KEY` are server-only.
 - Never create `NEXT_PUBLIC_RELAYER_PRIVATE_KEY` or `NEXT_PUBLIC_DEPLOYER_PRIVATE_KEY`.
 - Real mode never returns fake transaction hashes.
@@ -55,10 +48,6 @@ TEE_SERVICE_REGISTRY_ADDRESS=0x9644e8562cE0Fe12b4deeC4163c064A8862Bf47F
 RELAYER_PRIVATE_KEY=
 DEPLOYER_PRIVATE_KEY=
 
-AA_PROVIDER=custom
-AA_PROVIDER_KIND=custom
-AA_FACTORY_ADDRESS=
-
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0802
 RITUAL_LLM_EXECUTOR_ADDRESS=
 RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
@@ -72,14 +61,11 @@ RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
 RITUAL_LLM_LOCK_DURATION=50000
 CHAT_MANAGER_ADDRESS=
 
-MIN_SMART_ACCOUNT_BALANCE_WEI=1000000000000000
-SESSION_KEY_TTL_HOURS=24
-
 STORAGE_DRIVER=memory
 MOCK_MODE=false
 ```
 
-`RELAYER_PRIVATE_KEY` is used as the server-held chat session executor key. It must stay server-side and needs enough testnet gas to submit authorized chat transactions.
+`RELAYER_PRIVATE_KEY` is used as the server-held chat sender key. It must stay server-side and needs enough testnet gas to submit chat transactions.
 
 ## Find a Ritual LLM Executor
 
@@ -106,26 +92,11 @@ npm run contracts:compile
 npm run contracts:test
 ```
 
-Deploy the smart account factory:
-
-```bash
-RITUAL_RPC_URL=https://rpc.ritualfoundation.org
-DEPLOYER_PRIVATE_KEY=0x...
-npm run contracts:deploy:aa
-```
-
-Set the printed:
-
-```bash
-AA_FACTORY_ADDRESS=0x...
-```
-
 Deploy the chat manager after setting the LLM executor:
 
 ```bash
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 DEPLOYER_PRIVATE_KEY=0x...
-AA_FACTORY_ADDRESS=0x...
 RITUAL_LLM_EXECUTOR_ADDRESS=0x...
 RITUAL_LLM_MODEL=zai-org/GLM-4.7-FP8
 RITUAL_LLM_TTL=300
@@ -142,10 +113,9 @@ The deploy script prints:
 CHAT_MANAGER_ADDRESS=0x...
 ```
 
-It also funds the ChatManager and session executor in RitualWallet when `RITUAL_LLM_WALLET_FUNDING_WEI` is set, and
-allowlists `CHAT_MANAGER_ADDRESS` on the factory when the deployer owns the factory. Conversation history is disabled
-by default for simple public v1 chat; set `RITUAL_LLM_CONVO_HISTORY_ENABLED=true` only when real DA credentials are
-configured.
+It also funds the ChatManager in RitualWallet when `RITUAL_LLM_WALLET_FUNDING_WEI` is set. Conversation history is
+disabled by default for simple public v1 chat; set `RITUAL_LLM_CONVO_HISTORY_ENABLED=true` only when real DA
+credentials are configured.
 
 ## Run Locally
 
@@ -173,11 +143,10 @@ Mock mode may generate fake local addresses and fake tx hashes. Real mode must n
 Chat is enabled only when:
 
 - wallet is connected
-- smart account is deployed
-- smart account balance is at least `MIN_SMART_ACCOUNT_BALANCE_WEI`
-- session key is authorized and not expired
 - `CHAT_MANAGER_ADDRESS` is configured
-- `CHAT_MANAGER_ADDRESS` is approved by the smart account factory
+- `RELAYER_PRIVATE_KEY` is configured server-side
+- the relayer has enough Ritual testnet gas
+- Ritual LLM config is working
 
 If any condition is missing, the existing status card shows the blocking state.
 
@@ -187,17 +156,9 @@ If any condition is missing, the existing status card shows the blocking state.
 
 Set `CHAT_MANAGER_ADDRESS` after deploying `RitualChatManager`.
 
-### Chat target not approved
+### Relayer not configured
 
-The factory owner must approve the deployed `CHAT_MANAGER_ADDRESS`. The deploy script does this automatically when `AA_FACTORY_ADDRESS` is set and the deployer owns the factory.
-
-### Session key pending
-
-Click `Authorize Chat Session` and approve the one-time setup transaction in the connected wallet.
-
-### Smart account needs funding
-
-Send a small amount of Ritual testnet token to the displayed smart account address.
+Set `RELAYER_PRIVATE_KEY` on the server only. Never expose it in frontend code.
 
 ### Wallet nonce / replacement transaction errors
 
@@ -210,7 +171,7 @@ already known
 transaction underpriced
 ```
 
-usually mean the wallet has a pending or stuck setup transaction. Open the wallet activity queue and wait for, speed up, or cancel the pending transaction. If needed, clear activity/nonce data in the wallet settings, refresh, and try again.
+usually mean the relayer has a pending or stuck transaction. Wait for the pending transaction to settle, then try again.
 
 ## Verification
 

@@ -1,15 +1,21 @@
 import {
   decodeEventLog,
+  encodeFunctionData,
   formatEther,
+  type Address,
   type Hash,
 } from "viem";
+import { ethers } from "ethers";
 import { privateKeyToAccount } from "viem/accounts";
 import {
+  CHAT_MANAGER_ADDRESS,
   MOCK_MODE,
   RELAYER_PRIVATE_KEY,
+  RITUAL_RPC_URL,
 } from "@/lib/config";
 import { getPublicClient } from "@/lib/ritual/chain";
-import { parseCompletionText, ritualChatManagerAbi } from "@/lib/ritual/llm";
+import { ritualChain } from "@/lib/ritual/chain";
+import { parseCompletionText, ritualChatManagerAbi, validatePrompt } from "@/lib/ritual/llm";
 
 export async function checkRelayerBalance() {
   if (MOCK_MODE) return { ok: true, balance: "mock" };
@@ -23,6 +29,38 @@ export async function checkRelayerBalance() {
     throw new Error("Relayer is temporarily out of testnet gas. Please try again later.");
   }
   return { ok: true, balance: formatEther(balance) };
+}
+
+export async function submitChatManagerTransaction(prompt: string) {
+  if (!CHAT_MANAGER_ADDRESS) {
+    throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
+  }
+  if (!RELAYER_PRIVATE_KEY) {
+    throw new Error("Relayer unavailable. Set RELAYER_PRIVATE_KEY on the server.");
+  }
+  if (!RITUAL_RPC_URL) {
+    throw new Error("RPC unavailable. Set RITUAL_RPC_URL to submit chat transactions.");
+  }
+
+  await checkRelayerBalance();
+
+  const provider = new ethers.JsonRpcProvider(RITUAL_RPC_URL, Number(ritualChain.id));
+  const signer = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
+  const gasPrice = await getPublicClient().getGasPrice();
+  const data = encodeFunctionData({
+    abi: ritualChatManagerAbi,
+    functionName: "sendChatMessage",
+    args: [validatePrompt(prompt)],
+  });
+  const tx = await signer.sendTransaction({
+    to: CHAT_MANAGER_ADDRESS as Address,
+    data,
+    value: 0,
+    gasLimit: 6_000_000n,
+    gasPrice: gasPrice * 2n,
+  });
+
+  return tx.hash as Hash;
 }
 
 export async function waitForTxConfirmation(hash: Hash) {

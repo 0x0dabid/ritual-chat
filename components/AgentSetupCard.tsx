@@ -7,8 +7,6 @@ interface AgentSetupCardProps {
   walletAddress: string | null;
   walletPending: boolean;
   noInjectedWallet: boolean;
-  sessionKeyStatus?: string;
-  onAuthorizeSessionKey?: () => void;
   onConnectWallet: () => void;
   onDisconnectWallet: () => void;
   onCreate: () => void;
@@ -25,18 +23,16 @@ export function AgentSetupCard({
   walletAddress,
   walletPending,
   noInjectedWallet,
-  sessionKeyStatus,
-  onAuthorizeSessionKey,
   onConnectWallet,
   onDisconnectWallet,
   onCreate,
 }: AgentSetupCardProps) {
   const hasWallet = Boolean(walletAddress);
   const createButtonLabel = realModePending
-    ? "Smart Account Created"
+    ? "Ritual Chat Ready"
     : active
-      ? "Smart Account Active"
-      : "Create My Smart Account";
+      ? "Ritual Chat Ready"
+      : "Start Ritual Chat";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -47,13 +43,13 @@ export function AgentSetupCard({
           <div className="mt-1 h-5 w-5 rounded-full border border-ritual-green/45" />
         )}
         <div>
-          <h2 className="text-lg font-semibold">Create your Ritual Smart Account</h2>
+          <h2 className="text-lg font-semibold">Start Ritual Chat</h2>
           <p className="mt-2 text-sm leading-6 text-black/68">
             {active || realModePending
-              ? "Your Ritual Smart Account is active."
+              ? "Your wallet is connected for Ritual Chat identity."
               : hasWallet
-                ? "Your connected wallet will be used as the identity for your permanent Ritual Smart Account."
-                : "Connect your wallet to create your Ritual Smart Account."}
+                ? "Your connected wallet will be used as the identity for Ritual Chat."
+                : "Connect your wallet to start Ritual Chat."}
           </p>
         </div>
       </div>
@@ -84,19 +80,8 @@ export function AgentSetupCard({
       </button>
       {realModePending ? (
         <p className="mt-3 text-sm leading-6 text-black/68">
-          Your Ritual Smart Account is active.
+          Your wallet identity is active.
         </p>
-      ) : null}
-      {active && sessionKeyStatus !== "active" && onAuthorizeSessionKey ? (
-        <button
-          type="button"
-          onClick={onAuthorizeSessionKey}
-          disabled={Boolean(loadingStep) || !hasWallet}
-          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
-        >
-          {loadingStep ? <Loader2 className="animate-spin" size={18} aria-hidden="true" /> : null}
-          Authorize Chat Session
-        </button>
       ) : null}
       {loadingStep ? (
         <p className="mt-3 text-sm text-ritual-green">{loadingStep}</p>

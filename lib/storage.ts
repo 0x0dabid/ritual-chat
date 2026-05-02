@@ -114,6 +114,21 @@ export async function countMessagesForSmartAccountToday(smartAccountAddress: str
   )).length;
 }
 
+export async function countMessagesForWalletToday(wallet: string) {
+  if (!USE_FILE_STORAGE && !USE_MEMORY_STORAGE && !USE_DATABASE_STORAGE) return 0;
+  const data = await readData();
+  const today = new Date().toISOString().slice(0, 10);
+  const sessionIds = data.sessions
+    .filter((session) => session.userWallet.toLowerCase() === wallet.toLowerCase())
+    .map((session) => session.id);
+
+  return data.messages.filter((message) => (
+    sessionIds.includes(message.sessionId) &&
+    message.role === "user" &&
+    message.createdAt.slice(0, 10) === today
+  )).length;
+}
+
 export async function incrementRateLimit(match: Omit<RateLimitRecord, "id" | "count" | "date">) {
   if (!USE_FILE_STORAGE && !USE_MEMORY_STORAGE && !USE_DATABASE_STORAGE) return 1;
   const data = await readData();
