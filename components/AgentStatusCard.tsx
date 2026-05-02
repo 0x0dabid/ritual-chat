@@ -5,14 +5,21 @@ interface AgentStatusCardProps {
   sessionWalletAddress?: string | null;
   activeSenderLabel?: string;
   ritualWalletAmount: string;
+  connectedNativeBalance: string;
+  connectedRitualWalletBalance: string;
+  connectedRitualWalletLock: string;
+  sessionNativeBalance: string;
+  sessionRitualWalletBalance: string;
+  sessionRitualWalletLock: string;
   actionPending?: boolean;
   onGenerateSessionWallet: () => void;
   onUseConnectedWallet: () => void;
   onUseSessionWallet: () => void;
   onFundSessionWallet: () => void;
-  onDepositDefault: () => void;
-  onDepositAmount: () => void;
-  onWithdrawAmount: () => void;
+  onDepositConnected: () => void;
+  onWithdrawConnected: () => void;
+  onDepositSession: () => void;
+  onWithdrawSession: () => void;
   onAmountChange: (value: string) => void;
 }
 
@@ -34,14 +41,21 @@ export function AgentStatusCard({
   sessionWalletAddress,
   activeSenderLabel = "Connected Wallet",
   ritualWalletAmount,
+  connectedNativeBalance,
+  connectedRitualWalletBalance,
+  connectedRitualWalletLock,
+  sessionNativeBalance,
+  sessionRitualWalletBalance,
+  sessionRitualWalletLock,
   actionPending = false,
   onGenerateSessionWallet,
   onUseConnectedWallet,
   onUseSessionWallet,
   onFundSessionWallet,
-  onDepositDefault,
-  onDepositAmount,
-  onWithdrawAmount,
+  onDepositConnected,
+  onWithdrawConnected,
+  onDepositSession,
+  onWithdrawSession,
   onAmountChange,
 }: AgentStatusCardProps) {
   const chatStatus = session.chatStatus ?? (session.basicChatStatus === "active" ? "ready" : "missing-chat-manager");
@@ -66,6 +80,12 @@ export function AgentStatusCard({
           value={sessionWalletAddress ? <span title={sessionWalletAddress}>{compact(sessionWalletAddress)}</span> : "Not generated"}
         />
         <Row label="Chat Sender" value={activeSenderLabel} />
+        <Row label="MetaMask Balance" value={connectedNativeBalance} />
+        <Row label="MetaMask RitualWallet" value={connectedRitualWalletBalance} />
+        <Row label="MetaMask Lock" value={connectedRitualWalletLock} />
+        <Row label="Session Balance" value={sessionWalletAddress ? sessionNativeBalance : "Not generated"} />
+        <Row label="Session RitualWallet" value={sessionWalletAddress ? sessionRitualWalletBalance : "Not generated"} />
+        <Row label="Session Lock" value={sessionWalletAddress ? sessionRitualWalletLock : "Not generated"} />
         <Row label="Network" value="Ritual Testnet" />
         <Row label="Status" value="Active" />
         <Row label="Chat Status" value={chatStatusLabel} />
@@ -118,39 +138,49 @@ export function AgentStatusCard({
         >
           Fund Session Wallet 0.01 RITUAL
         </button>
-        <button
-          type="button"
-          onClick={onDepositDefault}
-          disabled={actionPending}
-          className="inline-flex w-full items-center justify-center rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
-        >
-          Deposit 0.01 RITUAL to RitualWallet
-        </button>
         <input
           type="number"
           min="0"
-          step="0.001"
+          step="any"
           value={ritualWalletAmount}
           onChange={(event) => onAmountChange(event.target.value)}
-          placeholder="Amount"
+          placeholder="RITUAL amount"
           className="w-full rounded-lg border border-ritual-green/20 bg-white/55 px-4 py-3 text-sm outline-none transition placeholder:text-black/35 focus:border-ritual-green/50"
         />
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={onDepositAmount}
+            onClick={onDepositConnected}
             disabled={actionPending}
             className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Deposit
+            Deposit MetaMask
           </button>
           <button
             type="button"
-            onClick={onWithdrawAmount}
+            onClick={onWithdrawConnected}
             disabled={actionPending}
             className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Withdraw
+            Withdraw MetaMask
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onDepositSession}
+            disabled={actionPending || !sessionWalletAddress}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Deposit Session
+          </button>
+          <button
+            type="button"
+            onClick={onWithdrawSession}
+            disabled={actionPending || !sessionWalletAddress}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Withdraw Session
           </button>
         </div>
       </div>

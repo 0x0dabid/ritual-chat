@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createWalletClient, http, parseAbi, parseEther, type Address, type Hash, type Hex } from "viem";
+import {
+  createPublicClient,
+  createWalletClient,
+  formatEther,
+  http,
+  parseAbi,
+  parseEther,
+  type Address,
+  type Hash,
+  type Hex,
+} from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { useAccount, useChainId, useConnect, useDisconnect, useWalletClient } from "wagmi";
 import { AgentSetupCard } from "@/components/AgentSetupCard";
@@ -20,7 +30,20 @@ const RITUAL_WALLET_ADDRESS = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
 const ritualWalletAbi = parseAbi([
   "function deposit(uint256 lockDuration) payable",
   "function withdraw(uint256 amount)",
+  "function balanceOf(address account) view returns (uint256)",
+  "function lockUntil(address account) view returns (uint256)",
 ]);
+const ritualPublicClient = createPublicClient({
+  chain: ritualTestnet,
+  transport: http(ritualTestnet.rpcUrls.default.http[0]),
+});
+
+interface WalletBalances {
+  nativeWei: bigint;
+  ritualWalletWei: bigint;
+  ritualWalletLockUntil: bigint;
+  currentBlock: bigint;
+}
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -40,6 +63,8 @@ export default function Home() {
   const [activeSender, setActiveSender] = useState<"wallet" | "session">("wallet");
   const [ritualWalletAmount, setRitualWalletAmount] = useState("0.01");
   const [walletActionPending, setWalletActionPending] = useState(false);
+  const [connectedBalances, setConnectedBalances] = useState<WalletBalances | null>(null);
+  const [sessionBalances, setSessionBalances] = useState<WalletBalances | null>(null);
 
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE === "true", [agent]);
   const walletAddress = isConnected && address ? address : null;
@@ -82,6 +107,7 @@ export default function Home() {
     if (!walletAddress) {
       setAgent(null);
       setMessages([]);
+      setConnectedBalances(null);
       return;
     }
 
@@ -103,6 +129,12 @@ export default function Home() {
         setError("Something went wrong while loading Ritual Chat. Please try again.");
       });
   }, [walletAddress]);
+
+  useEffect(() => {
+    refreshWalletBalances();
+    // Balances are intentionally refreshed when either wallet address changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddress, sessionWalletAddress]);
 
   async function connectWallet() {
     setError(null);
@@ -212,6 +244,9 @@ export default function Home() {
     if (mockMode) return `0x${crypto.randomUUID().replace(/-/g, "").padEnd(64, "0")}` as Hash;
     if (activeSender === "session") {
       if (!sessionWalletKey) throw new Error("Generate a session wallet before using session chat.");
+      const balances = await loadWalletBalances(privateKeyToAccount(sessionWalletKey).address);
+      setSessionBalances(balances);
+      assertSenderReadyForLlm(balances, "session wallet");
       const account = privateKeyToAccount(sessionWalletKey);
       const client = createWalletClient({
         account,
@@ -230,6 +265,9 @@ export default function Home() {
     if (chainId !== ritualTestnet.id) {
       throw new Error("Wrong network. Switch MetaMask to Ritual Testnet before sending chat.");
     }
+    const balances = await loadWalletBalances(walletClient.account.address);
+    setConnectedBalances(balances);
+    assertSenderReadyForLlm(balances, "connected wallet");
     return walletClient.sendTransaction({
       to: txRequest.to,
       data: txRequest.data,
@@ -267,22 +305,31 @@ export default function Home() {
       });
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("Funding transaction failed on-chain.");
+      await refreshWalletBalances();
       setNotice("Session wallet funded with 0.01 RITUAL.");
     });
   }
 
-  async function depositDefaultToRitualWallet() {
-    await depositToRitualWallet("0.01");
+  async function depositConnectedToRitualWallet() {
+    await depositToRitualWallet("wallet", ritualWalletAmount);
   }
 
-  async function depositCustomToRitualWallet() {
-    await depositToRitualWallet(ritualWalletAmount);
+  async function depositSessionToRitualWallet() {
+    await depositToRitualWallet("session", ritualWalletAmount);
   }
 
-  async function withdrawCustomFromRitualWallet() {
-    const amount = parseRitualAmount(ritualWalletAmount);
+  async function withdrawConnectedFromRitualWallet() {
+    await withdrawFromRitualWallet("wallet", ritualWalletAmount);
+  }
+
+  async function withdrawSessionFromRitualWallet() {
+    await withdrawFromRitualWallet("session", ritualWalletAmount);
+  }
+
+  async function withdrawFromRitualWallet(sender: "wallet" | "session", amountText: string) {
+    const amount = parseRitualAmount(amountText);
     await runWalletAction("RitualWallet withdrawal failed.", async () => {
-      const txHash = activeSender === "session"
+      const txHash = sender === "session"
         ? await getSessionWalletClient().writeContract({
             address: RITUAL_WALLET_ADDRESS,
             abi: ritualWalletAbi,
@@ -297,14 +344,15 @@ export default function Home() {
           });
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("RitualWallet withdrawal failed on-chain.");
-      setNotice(`Withdrew ${ritualWalletAmount || "0"} RITUAL from RitualWallet.`);
+      await refreshWalletBalances();
+      setNotice(`Withdrew ${amountText || "0"} RITUAL from RitualWallet.`);
     });
   }
 
-  async function depositToRitualWallet(amountText: string) {
+  async function depositToRitualWallet(sender: "wallet" | "session", amountText: string) {
     const amount = parseRitualAmount(amountText);
     await runWalletAction("RitualWallet deposit failed.", async () => {
-      const txHash = activeSender === "session"
+      const txHash = sender === "session"
         ? await getSessionWalletClient().writeContract({
             address: RITUAL_WALLET_ADDRESS,
             abi: ritualWalletAbi,
@@ -321,8 +369,50 @@ export default function Home() {
           });
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("RitualWallet deposit failed on-chain.");
+      await refreshWalletBalances();
       setNotice(`Deposited ${amountText || "0"} RITUAL to RitualWallet.`);
     });
+  }
+
+  async function refreshWalletBalances() {
+    const [connected, session] = await Promise.all([
+      walletAddress ? loadWalletBalances(walletAddress).catch(() => null) : Promise.resolve(null),
+      sessionWalletAddress ? loadWalletBalances(sessionWalletAddress).catch(() => null) : Promise.resolve(null),
+    ]);
+    setConnectedBalances(connected);
+    setSessionBalances(session);
+  }
+
+  async function loadWalletBalances(account: Address): Promise<WalletBalances> {
+    const [nativeWei, ritualWalletWei, ritualWalletLockUntil, currentBlock] = await Promise.all([
+      ritualPublicClient.getBalance({ address: account }),
+      ritualPublicClient.readContract({
+        address: RITUAL_WALLET_ADDRESS,
+        abi: ritualWalletAbi,
+        functionName: "balanceOf",
+        args: [account],
+      }),
+      ritualPublicClient.readContract({
+        address: RITUAL_WALLET_ADDRESS,
+        abi: ritualWalletAbi,
+        functionName: "lockUntil",
+        args: [account],
+      }),
+      ritualPublicClient.getBlockNumber(),
+    ]);
+    return { nativeWei, ritualWalletWei, ritualWalletLockUntil, currentBlock };
+  }
+
+  function assertSenderReadyForLlm(balances: WalletBalances, label: string) {
+    if (balances.nativeWei <= 0n) {
+      throw new Error(`The ${label} needs native Ritual testnet gas before chatting.`);
+    }
+    if (balances.ritualWalletWei <= 0n) {
+      throw new Error(`The ${label} needs a RitualWallet deposit before chatting.`);
+    }
+    if (balances.ritualWalletLockUntil <= balances.currentBlock) {
+      throw new Error(`The ${label} RitualWallet deposit is not locked. Deposit any amount before chatting.`);
+    }
   }
 
   async function runWalletAction(fallbackError: string, action: () => Promise<void>) {
@@ -423,14 +513,21 @@ export default function Home() {
                 sessionWalletAddress={sessionWalletAddress}
                 activeSenderLabel={activeSender === "session" ? "Session Wallet" : "MetaMask"}
                 ritualWalletAmount={ritualWalletAmount}
+                connectedNativeBalance={formatBalance(connectedBalances?.nativeWei)}
+                connectedRitualWalletBalance={formatBalance(connectedBalances?.ritualWalletWei)}
+                connectedRitualWalletLock={formatLock(connectedBalances)}
+                sessionNativeBalance={formatBalance(sessionBalances?.nativeWei)}
+                sessionRitualWalletBalance={formatBalance(sessionBalances?.ritualWalletWei)}
+                sessionRitualWalletLock={formatLock(sessionBalances)}
                 actionPending={walletActionPending}
                 onGenerateSessionWallet={generateSessionWallet}
                 onUseConnectedWallet={() => setActiveSender("wallet")}
                 onUseSessionWallet={() => setActiveSender("session")}
                 onFundSessionWallet={fundSessionWallet}
-                onDepositDefault={depositDefaultToRitualWallet}
-                onDepositAmount={depositCustomToRitualWallet}
-                onWithdrawAmount={withdrawCustomFromRitualWallet}
+                onDepositConnected={depositConnectedToRitualWallet}
+                onWithdrawConnected={withdrawConnectedFromRitualWallet}
+                onDepositSession={depositSessionToRitualWallet}
+                onWithdrawSession={withdrawSessionFromRitualWallet}
                 onAmountChange={setRitualWalletAmount}
               />
             ) : null}
@@ -449,8 +546,23 @@ export default function Home() {
   );
 }
 
+function formatBalance(value: bigint | undefined) {
+  if (value === undefined) return "Loading";
+  return `${Number(formatEther(value)).toLocaleString(undefined, { maximumFractionDigits: 5 })} RITUAL`;
+}
+
+function formatLock(balances: WalletBalances | null) {
+  if (!balances) return "Loading";
+  return balances.ritualWalletLockUntil > balances.currentBlock
+    ? `Locked until ${balances.ritualWalletLockUntil.toString()}`
+    : "Not locked";
+}
+
 function formatChatTransactionError(err: unknown) {
   const message = collectErrorText(err).toLowerCase();
+  if (message.includes("insufficient wallet balance") || message.includes("ritualwallet deposit")) {
+    return "The active chat sender needs a RitualWallet deposit before chatting. Deposit any amount, then try again.";
+  }
   if (
     message.includes("replacement transaction underpriced")
     || message.includes("nonce too low")
