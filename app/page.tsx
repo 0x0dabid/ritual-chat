@@ -25,7 +25,9 @@ import type { AgentSession, ChatMessage } from "@/lib/types";
 import { ritualTestnet } from "@/lib/wagmi";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
-const SESSION_WALLET_KEY = "ritual-chat-session-wallet-key";
+const LEGACY_SESSION_WALLET_KEY = "ritual-chat-session-wallet-key";
+const SESSION_WALLET_ENCRYPTED_KEY = "ritual-chat-session-wallet-encrypted-key";
+const SESSION_WALLET_CRYPTO_KEY = "ritual-chat-local-crypto-key";
 const RITUAL_WALLET_ADDRESS = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
 const ritualWalletAbi = parseAbi([
   "function deposit(uint256 lockDuration) payable",
@@ -62,6 +64,7 @@ export default function Home() {
   const [sessionWalletKey, setSessionWalletKey] = useState<Hex | null>(null);
   const [activeSender, setActiveSender] = useState<"wallet" | "session">("wallet");
   const [ritualWalletAmount, setRitualWalletAmount] = useState("0.01");
+  const [sessionWalletAmount, setSessionWalletAmount] = useState("0.01");
   const [walletActionPending, setWalletActionPending] = useState(false);
   const [connectedBalances, setConnectedBalances] = useState<WalletBalances | null>(null);
   const [sessionBalances, setSessionBalances] = useState<WalletBalances | null>(null);
@@ -79,11 +82,15 @@ export default function Home() {
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
-    const storedSessionWallet = window.localStorage.getItem(SESSION_WALLET_KEY);
-    if (storedSessionWallet?.startsWith("0x")) {
-      setSessionWalletKey(storedSessionWallet as Hex);
-      setActiveSender("session");
-    }
+    loadStoredSessionWallet()
+      .then((storedSessionWallet) => {
+        if (!storedSessionWallet) return;
+        setSessionWalletKey(storedSessionWallet);
+        setActiveSender("session");
+      })
+      .catch(() => {
+        setError("Stored session wallet could not be loaded in this browser.");
+      });
   }, []);
 
   useEffect(() => {
@@ -278,10 +285,15 @@ export default function Home() {
 
   function generateSessionWallet() {
     const privateKey = sessionWalletKey ?? generatePrivateKey();
-    window.localStorage.setItem(SESSION_WALLET_KEY, privateKey);
-    setSessionWalletKey(privateKey);
-    setActiveSender("session");
-    setNotice("Session wallet ready. Fund it before using session chat.");
+    storeEncryptedSessionWallet(privateKey)
+      .then(() => {
+        setSessionWalletKey(privateKey);
+        setActiveSender("session");
+        setNotice("Session wallet ready. It is encrypted and stored locally in this browser.");
+      })
+      .catch(() => {
+        setError("Session wallet could not be stored in this browser.");
+      });
   }
 
   async function fundSessionWallet() {
@@ -301,12 +313,30 @@ export default function Home() {
     await runWalletAction("Funding was rejected or failed.", async () => {
       const txHash = await walletClient.sendTransaction({
         to: sessionWalletAddress,
-        value: parseEther("0.01"),
+        value: parseRitualAmount(sessionWalletAmount),
       });
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("Funding transaction failed on-chain.");
       await refreshWalletBalances();
-      setNotice("Session wallet funded with 0.01 RITUAL.");
+      setNotice(`Session wallet funded with ${sessionWalletAmount} RITUAL.`);
+    });
+  }
+
+  async function withdrawSessionNativeToMetaMask() {
+    if (!walletAddress) {
+      setError("Connect MetaMask before withdrawing from the session wallet.");
+      return;
+    }
+    const amount = parseRitualAmount(sessionWalletAmount);
+    await runWalletAction("Session wallet withdrawal failed.", async () => {
+      const txHash = await getSessionWalletClient().sendTransaction({
+        to: walletAddress,
+        value: amount,
+      });
+      const status = await pollTx(txHash);
+      if (status !== "confirmed") throw new Error("Session wallet withdrawal failed on-chain.");
+      await refreshWalletBalances();
+      setNotice(`Withdrew ${sessionWalletAmount} RITUAL from session wallet to MetaMask.`);
     });
   }
 
@@ -511,24 +541,29 @@ export default function Home() {
               <AgentStatusCard
                 session={agent}
                 sessionWalletAddress={sessionWalletAddress}
+                activeSender={activeSender}
                 activeSenderLabel={activeSender === "session" ? "Session Wallet" : "MetaMask"}
                 ritualWalletAmount={ritualWalletAmount}
+                sessionWalletAmount={sessionWalletAmount}
                 connectedNativeBalance={formatBalance(connectedBalances?.nativeWei)}
                 connectedRitualWalletBalance={formatBalance(connectedBalances?.ritualWalletWei)}
                 connectedRitualWalletLock={formatLock(connectedBalances)}
                 sessionNativeBalance={formatBalance(sessionBalances?.nativeWei)}
                 sessionRitualWalletBalance={formatBalance(sessionBalances?.ritualWalletWei)}
                 sessionRitualWalletLock={formatLock(sessionBalances)}
+                ritualWalletAddress={RITUAL_WALLET_ADDRESS}
                 actionPending={walletActionPending}
                 onGenerateSessionWallet={generateSessionWallet}
                 onUseConnectedWallet={() => setActiveSender("wallet")}
                 onUseSessionWallet={() => setActiveSender("session")}
                 onFundSessionWallet={fundSessionWallet}
+                onWithdrawSessionNative={withdrawSessionNativeToMetaMask}
                 onDepositConnected={depositConnectedToRitualWallet}
                 onWithdrawConnected={withdrawConnectedFromRitualWallet}
                 onDepositSession={depositSessionToRitualWallet}
                 onWithdrawSession={withdrawSessionFromRitualWallet}
-                onAmountChange={setRitualWalletAmount}
+                onSessionAmountChange={setSessionWalletAmount}
+                onRitualWalletAmountChange={setRitualWalletAmount}
               />
             ) : null}
           </div>
@@ -556,6 +591,84 @@ function formatLock(balances: WalletBalances | null) {
   return balances.ritualWalletLockUntil > balances.currentBlock
     ? `Locked until ${balances.ritualWalletLockUntil.toString()}`
     : "Not locked";
+}
+
+async function loadStoredSessionWallet() {
+  const encrypted = window.localStorage.getItem(SESSION_WALLET_ENCRYPTED_KEY);
+  if (encrypted) {
+    return decryptLocalValue(encrypted) as Promise<Hex>;
+  }
+
+  const legacy = window.localStorage.getItem(LEGACY_SESSION_WALLET_KEY);
+  if (legacy?.startsWith("0x")) {
+    await storeEncryptedSessionWallet(legacy as Hex);
+    window.localStorage.removeItem(LEGACY_SESSION_WALLET_KEY);
+    return legacy as Hex;
+  }
+
+  return null;
+}
+
+async function storeEncryptedSessionWallet(privateKey: Hex) {
+  const encrypted = await encryptLocalValue(privateKey);
+  window.localStorage.setItem(SESSION_WALLET_ENCRYPTED_KEY, encrypted);
+}
+
+async function encryptLocalValue(value: string) {
+  const key = await getLocalCryptoKey();
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = new TextEncoder().encode(value);
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, data);
+  return JSON.stringify({
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted)),
+  });
+}
+
+async function decryptLocalValue(payload: string) {
+  const key = await getLocalCryptoKey();
+  const parsed = JSON.parse(payload) as { iv: string; data: string };
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64ToBytes(parsed.iv) },
+    key,
+    base64ToBytes(parsed.data),
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+async function getLocalCryptoKey() {
+  const stored = window.localStorage.getItem(SESSION_WALLET_CRYPTO_KEY);
+  if (stored) {
+    return crypto.subtle.importKey(
+      "jwk",
+      JSON.parse(stored) as JsonWebKey,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  }
+
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
+  const jwk = await crypto.subtle.exportKey("jwk", key);
+  window.localStorage.setItem(SESSION_WALLET_CRYPTO_KEY, JSON.stringify(jwk));
+  return key;
+}
+
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function formatChatTransactionError(err: unknown) {
