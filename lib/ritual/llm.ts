@@ -46,7 +46,7 @@ export async function sendPromptToRitualLLM(prompt: string) {
   }
 
   // In real mode this text is decoded from the settled Ritual LLM response. The
-  // relayer submits only the encoded, approved call built by buildLlmCallData().
+  // frontend submits only the encoded, approved call built by buildLlmCallData().
   return "Waiting for Ritual Testnet confirmation...";
 }
 

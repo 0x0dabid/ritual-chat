@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { isAddress, type Address } from "viem";
-import { MOCK_MODE } from "@/lib/config";
+import { CHAT_MANAGER_ADDRESS, MOCK_MODE } from "@/lib/config";
 import { getRequestIp, checkIpRateLimit, checkWalletChatRateLimit } from "@/lib/rateLimit";
 import { buildWalletChatSession } from "@/lib/ritual/chatSession";
-import { sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
-import { submitChatManagerTransaction } from "@/lib/ritual/relayer";
+import { buildChatManagerCallData, sendPromptToRitualLLM, validatePrompt } from "@/lib/ritual/llm";
 import { addChatMessage, getSession, upsertSession } from "@/lib/storage";
 import type { ChatMessage } from "@/lib/types";
 
@@ -28,9 +27,6 @@ export async function POST(request: Request) {
     if (refreshedSession.chatStatus === "missing-chat-manager") {
       throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
     }
-    if (refreshedSession.chatStatus === "missing-relayer") {
-      throw new Error("Relayer unavailable. Set RELAYER_PRIVATE_KEY on the server.");
-    }
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -44,7 +40,7 @@ export async function POST(request: Request) {
 
     const txHash = MOCK_MODE
       ? `0x${crypto.randomUUID().replace(/-/g, "").padEnd(64, "0")}`
-      : await submitChatManagerTransaction(prompt);
+      : undefined;
     const assistantResponse = MOCK_MODE
       ? await sendPromptToRitualLLM(prompt)
       : "Response pending on Ritual Testnet.";
@@ -58,9 +54,17 @@ export async function POST(request: Request) {
       txStatus: "pending",
       createdAt: new Date().toISOString(),
     };
-    await addChatMessage(assistantMessage);
+    if (MOCK_MODE) {
+      await addChatMessage(assistantMessage);
+    }
 
     return NextResponse.json({
+      requiresWalletSubmission: !MOCK_MODE,
+      txRequest: MOCK_MODE ? undefined : {
+        to: CHAT_MANAGER_ADDRESS,
+        data: buildChatManagerCallData(prompt),
+        value: "0",
+      },
       assistantResponse,
       txHash,
       txStatus: "pending",

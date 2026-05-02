@@ -70,6 +70,17 @@ export const RITUAL_LLM_TEMPERATURE = Number(process.env.RITUAL_LLM_TEMPERATURE 
 export const RITUAL_LLM_CONVO_HISTORY_PROVIDER = process.env.RITUAL_LLM_CONVO_HISTORY_PROVIDER;
 export const RITUAL_LLM_CONVO_HISTORY_PATH = process.env.RITUAL_LLM_CONVO_HISTORY_PATH;
 export const RITUAL_LLM_CONVO_HISTORY_KEY_REF = process.env.RITUAL_LLM_CONVO_HISTORY_KEY_REF;
+export const RITUAL_WALLET_ADDRESS = (
+  process.env.RITUAL_WALLET_ADDRESS ?? "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948"
+) as Address;
+export const RITUAL_LLM_WALLET_FUNDING_WEI = parsePositiveBigInt(
+  process.env.RITUAL_LLM_WALLET_FUNDING_WEI,
+  10_000_000_000_000_000n,
+);
+export const RITUAL_LLM_LOCK_DURATION = parsePositiveBigInt(
+  process.env.RITUAL_LLM_LOCK_DURATION,
+  50_000n,
+);
 
 export function txExplorerLink(txHash: string) {
   return `${RITUAL_EXPLORER_URL}/tx/${txHash}`;
@@ -83,4 +94,14 @@ function parsePositiveNumber(value: string | undefined, fallback: number) {
   if (!value) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parsePositiveBigInt(value: string | undefined, fallback: bigint) {
+  if (!value) return fallback;
+  try {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
 }

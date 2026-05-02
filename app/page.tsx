@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useAccount, useConnect, useDisconnect } from "wagmi";
+import { createWalletClient, http, parseAbi, parseEther, type Address, type Hash, type Hex } from "viem";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { useAccount, useChainId, useConnect, useDisconnect, useWalletClient } from "wagmi";
 import { AgentSetupCard } from "@/components/AgentSetupCard";
 import { AgentStatusCard } from "@/components/AgentStatusCard";
 import { ChatWindow } from "@/components/ChatWindow";
@@ -10,13 +12,22 @@ import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { TestnetNotice } from "@/components/TestnetNotice";
 import type { AgentSession, ChatMessage } from "@/lib/types";
+import { ritualTestnet } from "@/lib/wagmi";
 
 const SESSION_STORAGE_KEY = "ritual-chat-session-id";
+const SESSION_WALLET_KEY = "ritual-chat-session-wallet-key";
+const RITUAL_WALLET_ADDRESS = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
+const ritualWalletAbi = parseAbi([
+  "function deposit(uint256 lockDuration) payable",
+  "function withdraw(uint256 amount)",
+]);
 
 export default function Home() {
   const { address, isConnected } = useAccount();
   const { connectAsync, connectors, isPending: walletPending } = useConnect();
   const { disconnect } = useDisconnect();
+  const chainId = useChainId();
+  const { data: walletClient } = useWalletClient();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [agent, setAgent] = useState<AgentSession | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -25,19 +36,29 @@ export default function Home() {
   const [notice, setNotice] = useState<string | null>(null);
   const [hasInjectedWallet, setHasInjectedWallet] = useState<boolean | null>(null);
   const [isSubmittingTx, setIsSubmittingTx] = useState(false);
+  const [sessionWalletKey, setSessionWalletKey] = useState<Hex | null>(null);
+  const [activeSender, setActiveSender] = useState<"wallet" | "session">("wallet");
+  const [ritualWalletAmount, setRitualWalletAmount] = useState("0.01");
+  const [walletActionPending, setWalletActionPending] = useState(false);
 
   const mockMode = useMemo(() => agent?.mockMode ?? process.env.NEXT_PUBLIC_MOCK_MODE === "true", [agent]);
   const walletAddress = isConnected && address ? address : null;
+  const sessionWalletAddress = useMemo(() => (
+    sessionWalletKey ? privateKeyToAccount(sessionWalletKey).address : null
+  ), [sessionWalletKey]);
   const realModePending = false;
   const chatReady = Boolean(agent && agent.status === "active" && agent.chatStatus === "ready");
   const chatDisabledMessage = agent?.chatStatus === "missing-chat-manager"
     ? "ChatManager is not configured yet."
-    : agent?.chatStatus === "missing-relayer"
-      ? "Server relayer is not configured yet."
-      : undefined;
+    : undefined;
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
+    const storedSessionWallet = window.localStorage.getItem(SESSION_WALLET_KEY);
+    if (storedSessionWallet?.startsWith("0x")) {
+      setSessionWalletKey(storedSessionWallet as Hex);
+      setActiveSender("session");
+    }
   }, []);
 
   useEffect(() => {
@@ -167,14 +188,181 @@ export default function Home() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Ritual LLM response failed");
 
-      setMessages((current) => [...current, data.message]);
-      pollTx(data.message.txHash);
+      if (data.requiresWalletSubmission && data.txRequest) {
+        const txHash = await submitPreparedTransaction(data.txRequest);
+        const assistantMessage: ChatMessage = {
+          ...data.message,
+          txHash,
+        };
+        setMessages((current) => [...current, assistantMessage]);
+        pollTx(txHash);
+      } else {
+        setMessages((current) => [...current, data.message]);
+        pollTx(data.message.txHash);
+      }
     } catch (err) {
       console.error("Ritual chat transaction failed", err);
       setError(formatChatTransactionError(err));
     } finally {
       setIsSubmittingTx(false);
     }
+  }
+
+  async function submitPreparedTransaction(txRequest: { to: Address; data: Hex; value?: string }) {
+    if (mockMode) return `0x${crypto.randomUUID().replace(/-/g, "").padEnd(64, "0")}` as Hash;
+    if (activeSender === "session") {
+      if (!sessionWalletKey) throw new Error("Generate a session wallet before using session chat.");
+      const account = privateKeyToAccount(sessionWalletKey);
+      const client = createWalletClient({
+        account,
+        chain: ritualTestnet,
+        transport: http(ritualTestnet.rpcUrls.default.http[0]),
+      });
+      return client.sendTransaction({
+        to: txRequest.to,
+        data: txRequest.data,
+        value: BigInt(txRequest.value ?? "0"),
+        gas: 6_000_000n,
+      });
+    }
+
+    if (!walletClient) throw new Error("Connect your wallet before sending chat.");
+    if (chainId !== ritualTestnet.id) {
+      throw new Error("Wrong network. Switch MetaMask to Ritual Testnet before sending chat.");
+    }
+    return walletClient.sendTransaction({
+      to: txRequest.to,
+      data: txRequest.data,
+      value: BigInt(txRequest.value ?? "0"),
+      gas: 6_000_000n,
+    });
+  }
+
+  function generateSessionWallet() {
+    const privateKey = sessionWalletKey ?? generatePrivateKey();
+    window.localStorage.setItem(SESSION_WALLET_KEY, privateKey);
+    setSessionWalletKey(privateKey);
+    setActiveSender("session");
+    setNotice("Session wallet ready. Fund it before using session chat.");
+  }
+
+  async function fundSessionWallet() {
+    if (!sessionWalletAddress) {
+      setError("Generate a session wallet before funding it.");
+      return;
+    }
+    if (!walletClient) {
+      setError("Connect MetaMask before funding the session wallet.");
+      return;
+    }
+    if (chainId !== ritualTestnet.id) {
+      setError("Wrong network. Switch MetaMask to Ritual Testnet before funding.");
+      return;
+    }
+
+    await runWalletAction("Funding was rejected or failed.", async () => {
+      const txHash = await walletClient.sendTransaction({
+        to: sessionWalletAddress,
+        value: parseEther("0.01"),
+      });
+      const status = await pollTx(txHash);
+      if (status !== "confirmed") throw new Error("Funding transaction failed on-chain.");
+      setNotice("Session wallet funded with 0.01 RITUAL.");
+    });
+  }
+
+  async function depositDefaultToRitualWallet() {
+    await depositToRitualWallet("0.01");
+  }
+
+  async function depositCustomToRitualWallet() {
+    await depositToRitualWallet(ritualWalletAmount);
+  }
+
+  async function withdrawCustomFromRitualWallet() {
+    const amount = parseRitualAmount(ritualWalletAmount);
+    await runWalletAction("RitualWallet withdrawal failed.", async () => {
+      const txHash = activeSender === "session"
+        ? await getSessionWalletClient().writeContract({
+            address: RITUAL_WALLET_ADDRESS,
+            abi: ritualWalletAbi,
+            functionName: "withdraw",
+            args: [amount],
+          })
+        : await getConnectedWalletClient().writeContract({
+            address: RITUAL_WALLET_ADDRESS,
+            abi: ritualWalletAbi,
+            functionName: "withdraw",
+            args: [amount],
+          });
+      const status = await pollTx(txHash);
+      if (status !== "confirmed") throw new Error("RitualWallet withdrawal failed on-chain.");
+      setNotice(`Withdrew ${ritualWalletAmount || "0"} RITUAL from RitualWallet.`);
+    });
+  }
+
+  async function depositToRitualWallet(amountText: string) {
+    const amount = parseRitualAmount(amountText);
+    await runWalletAction("RitualWallet deposit failed.", async () => {
+      const txHash = activeSender === "session"
+        ? await getSessionWalletClient().writeContract({
+            address: RITUAL_WALLET_ADDRESS,
+            abi: ritualWalletAbi,
+            functionName: "deposit",
+            args: [50_000n],
+            value: amount,
+          })
+        : await getConnectedWalletClient().writeContract({
+            address: RITUAL_WALLET_ADDRESS,
+            abi: ritualWalletAbi,
+            functionName: "deposit",
+            args: [50_000n],
+            value: amount,
+          });
+      const status = await pollTx(txHash);
+      if (status !== "confirmed") throw new Error("RitualWallet deposit failed on-chain.");
+      setNotice(`Deposited ${amountText || "0"} RITUAL to RitualWallet.`);
+    });
+  }
+
+  async function runWalletAction(fallbackError: string, action: () => Promise<void>) {
+    if (walletActionPending) return;
+    setError(null);
+    setNotice(null);
+    setWalletActionPending(true);
+    try {
+      await action();
+    } catch (err) {
+      console.error(fallbackError, err);
+      setError(err instanceof Error ? err.message : fallbackError);
+    } finally {
+      setWalletActionPending(false);
+    }
+  }
+
+  function getConnectedWalletClient() {
+    if (!walletClient) throw new Error("Connect MetaMask before using RitualWallet.");
+    if (chainId !== ritualTestnet.id) {
+      throw new Error("Wrong network. Switch MetaMask to Ritual Testnet first.");
+    }
+    return walletClient;
+  }
+
+  function getSessionWalletClient() {
+    if (!sessionWalletKey) throw new Error("Generate a session wallet first.");
+    const account = privateKeyToAccount(sessionWalletKey);
+    return createWalletClient({
+      account,
+      chain: ritualTestnet,
+      transport: http(ritualTestnet.rpcUrls.default.http[0]),
+    });
+  }
+
+  function parseRitualAmount(value: string) {
+    if (!value || Number(value) <= 0) {
+      throw new Error("Enter a positive RITUAL amount.");
+    }
+    return parseEther(value);
   }
 
   async function pollTx(txHash?: string): Promise<"confirmed" | "failed" | "pending"> {
@@ -230,7 +418,21 @@ export default function Home() {
               onCreate={createAgent}
             />
             {agent ? (
-              <AgentStatusCard session={agent} />
+              <AgentStatusCard
+                session={agent}
+                sessionWalletAddress={sessionWalletAddress}
+                activeSenderLabel={activeSender === "session" ? "Session Wallet" : "MetaMask"}
+                ritualWalletAmount={ritualWalletAmount}
+                actionPending={walletActionPending}
+                onGenerateSessionWallet={generateSessionWallet}
+                onUseConnectedWallet={() => setActiveSender("wallet")}
+                onUseSessionWallet={() => setActiveSender("session")}
+                onFundSessionWallet={fundSessionWallet}
+                onDepositDefault={depositDefaultToRitualWallet}
+                onDepositAmount={depositCustomToRitualWallet}
+                onWithdrawAmount={withdrawCustomFromRitualWallet}
+                onAmountChange={setRitualWalletAmount}
+              />
             ) : null}
           </div>
           <ChatWindow

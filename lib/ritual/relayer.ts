@@ -11,7 +11,11 @@ import {
   CHAT_MANAGER_ADDRESS,
   MOCK_MODE,
   RELAYER_PRIVATE_KEY,
+  RITUAL_LLM_LOCK_DURATION,
+  RITUAL_LLM_TTL,
+  RITUAL_LLM_WALLET_FUNDING_WEI,
   RITUAL_RPC_URL,
+  RITUAL_WALLET_ADDRESS,
 } from "@/lib/config";
 import { getPublicClient } from "@/lib/ritual/chain";
 import { ritualChain } from "@/lib/ritual/chain";
@@ -31,6 +35,45 @@ export async function checkRelayerBalance() {
   return { ok: true, balance: formatEther(balance) };
 }
 
+const ritualWalletAbi = [
+  "function deposit(uint256 lockDuration) payable",
+  "function balanceOf(address account) view returns (uint256)",
+  "function lockUntil(address account) view returns (uint256)",
+] as const;
+
+async function ensureRelayerRitualWalletLock(provider: ethers.JsonRpcProvider, signer: ethers.Wallet) {
+  const ritualWallet = new ethers.Contract(RITUAL_WALLET_ADDRESS, ritualWalletAbi, signer);
+  const currentBlock = await provider.getBlockNumber();
+  const requiredLockUntil = BigInt(currentBlock) + BigInt(RITUAL_LLM_TTL) + 20n;
+  const [walletBalance, lockUntil] = await Promise.all([
+    ritualWallet.balanceOf(signer.address) as Promise<bigint>,
+    ritualWallet.lockUntil(signer.address) as Promise<bigint>,
+  ]);
+
+  if (walletBalance > 0n && lockUntil >= requiredLockUntil) {
+    return;
+  }
+
+  if (RITUAL_LLM_WALLET_FUNDING_WEI <= 0n) {
+    throw new Error(
+      "Relayer RitualWallet lock is missing. Set RITUAL_LLM_WALLET_FUNDING_WEI and RITUAL_LLM_LOCK_DURATION, then try again.",
+    );
+  }
+
+  const depositTx = await ritualWallet.deposit(RITUAL_LLM_LOCK_DURATION, {
+    value: RITUAL_LLM_WALLET_FUNDING_WEI,
+  });
+  const receipt = await depositTx.wait();
+  if (!receipt || receipt.status !== 1) {
+    throw new Error("Relayer RitualWallet funding failed. Please try again.");
+  }
+
+  const refreshedLockUntil = await ritualWallet.lockUntil(signer.address) as bigint;
+  if (refreshedLockUntil < requiredLockUntil) {
+    throw new Error("Relayer RitualWallet lock duration is too short for Ritual LLM.");
+  }
+}
+
 export async function submitChatManagerTransaction(prompt: string) {
   if (!CHAT_MANAGER_ADDRESS) {
     throw new Error("Chat is disabled until CHAT_MANAGER_ADDRESS is configured.");
@@ -46,6 +89,7 @@ export async function submitChatManagerTransaction(prompt: string) {
 
   const provider = new ethers.JsonRpcProvider(RITUAL_RPC_URL, Number(ritualChain.id));
   const signer = new ethers.Wallet(RELAYER_PRIVATE_KEY, provider);
+  await ensureRelayerRitualWalletLock(provider, signer);
   const gasPrice = await getPublicClient().getGasPrice();
   const data = encodeFunctionData({
     abi: ritualChatManagerAbi,

@@ -1,5 +1,5 @@
 import { isAddress, type Address } from "viem";
-import { addressExplorerLink, CHAT_MANAGER_ADDRESS, MOCK_MODE, RELAYER_PRIVATE_KEY } from "@/lib/config";
+import { addressExplorerLink, CHAT_MANAGER_ADDRESS, MOCK_MODE } from "@/lib/config";
 import { isBasicChatConfigured } from "@/lib/ritual/llm";
 import type { AgentSession } from "@/lib/types";
 
@@ -10,11 +10,7 @@ export function walletSessionId(walletAddress: string) {
 export function buildWalletChatSession(walletAddress: Address, createdAt?: string): AgentSession {
   if (!isAddress(walletAddress)) throw new Error("Invalid EVM wallet address.");
 
-  const chatStatus = !isBasicChatConfigured()
-    ? "missing-chat-manager"
-    : !MOCK_MODE && !RELAYER_PRIVATE_KEY
-      ? "missing-relayer"
-      : "ready";
+  const chatStatus = !isBasicChatConfigured() ? "missing-chat-manager" : "ready";
   const now = new Date().toISOString();
 
   return {
@@ -24,9 +20,7 @@ export function buildWalletChatSession(walletAddress: Address, createdAt?: strin
     smartAccountStatus: "active",
     basicChatStatus: chatStatus === "ready" ? "active" : "pending",
     basicChatStatusMessage: chatStatus === "ready"
-      ? "Basic chat uses Ritual LLM."
-      : chatStatus === "missing-relayer"
-        ? "Basic chat is pending server relayer configuration."
+        ? "Basic chat uses Ritual LLM."
         : "Basic chat is pending CHAT_MANAGER_ADDRESS configuration.",
     chatTargetApproved: Boolean(CHAT_MANAGER_ADDRESS),
     chatStatus,

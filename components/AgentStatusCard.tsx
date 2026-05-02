@@ -2,6 +2,18 @@ import type { AgentSession } from "@/lib/types";
 
 interface AgentStatusCardProps {
   session: AgentSession;
+  sessionWalletAddress?: string | null;
+  activeSenderLabel?: string;
+  ritualWalletAmount: string;
+  actionPending?: boolean;
+  onGenerateSessionWallet: () => void;
+  onUseConnectedWallet: () => void;
+  onUseSessionWallet: () => void;
+  onFundSessionWallet: () => void;
+  onDepositDefault: () => void;
+  onDepositAmount: () => void;
+  onWithdrawAmount: () => void;
+  onAmountChange: (value: string) => void;
 }
 
 function compact(value: string) {
@@ -17,15 +29,27 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export function AgentStatusCard({ session }: AgentStatusCardProps) {
+export function AgentStatusCard({
+  session,
+  sessionWalletAddress,
+  activeSenderLabel = "Connected Wallet",
+  ritualWalletAmount,
+  actionPending = false,
+  onGenerateSessionWallet,
+  onUseConnectedWallet,
+  onUseSessionWallet,
+  onFundSessionWallet,
+  onDepositDefault,
+  onDepositAmount,
+  onWithdrawAmount,
+  onAmountChange,
+}: AgentStatusCardProps) {
   const chatStatus = session.chatStatus ?? (session.basicChatStatus === "active" ? "ready" : "missing-chat-manager");
   const chatStatusLabel = chatStatus === "ready"
     ? "Ready"
     : chatStatus === "missing-chat-manager"
       ? "Missing ChatManager"
-      : chatStatus === "missing-relayer"
-        ? "Missing Relayer"
-        : "Pending";
+      : "Pending";
 
   return (
     <section className="rounded-lg border border-ritual-green/20 bg-ritual-card p-5 shadow-soft">
@@ -37,6 +61,11 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
       </div>
       <div className="mt-4">
         <Row label="Connected Wallet" value={<span title={session.userWallet}>{compact(session.userWallet)}</span>} />
+        <Row
+          label="Session Wallet"
+          value={sessionWalletAddress ? <span title={sessionWalletAddress}>{compact(sessionWalletAddress)}</span> : "Not generated"}
+        />
+        <Row label="Chat Sender" value={activeSenderLabel} />
         <Row label="Network" value="Ritual Testnet" />
         <Row label="Status" value="Active" />
         <Row label="Chat Status" value={chatStatusLabel} />
@@ -54,11 +83,80 @@ export function AgentStatusCard({ session }: AgentStatusCardProps) {
           )}
         />
       </div>
+      <div className="mt-4 grid gap-3">
+        <button
+          type="button"
+          onClick={onGenerateSessionWallet}
+          disabled={actionPending}
+          className="inline-flex w-full items-center justify-center rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
+        >
+          {sessionWalletAddress ? "Session Wallet Ready" : "Generate Session Wallet"}
+        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onUseConnectedWallet}
+            disabled={actionPending}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Use MetaMask
+          </button>
+          <button
+            type="button"
+            onClick={onUseSessionWallet}
+            disabled={actionPending || !sessionWalletAddress}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Use Session
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onFundSessionWallet}
+          disabled={actionPending || !sessionWalletAddress}
+          className="inline-flex w-full items-center justify-center rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
+        >
+          Fund Session Wallet 0.01 RITUAL
+        </button>
+        <button
+          type="button"
+          onClick={onDepositDefault}
+          disabled={actionPending}
+          className="inline-flex w-full items-center justify-center rounded-lg bg-ritual-green px-4 py-3 font-medium text-white transition hover:bg-ritual-green/90 disabled:cursor-not-allowed disabled:bg-ritual-green/55"
+        >
+          Deposit 0.01 RITUAL to RitualWallet
+        </button>
+        <input
+          type="number"
+          min="0"
+          step="0.001"
+          value={ritualWalletAmount}
+          onChange={(event) => onAmountChange(event.target.value)}
+          placeholder="Amount"
+          className="w-full rounded-lg border border-ritual-green/20 bg-white/55 px-4 py-3 text-sm outline-none transition placeholder:text-black/35 focus:border-ritual-green/50"
+        />
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={onDepositAmount}
+            disabled={actionPending}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Deposit
+          </button>
+          <button
+            type="button"
+            onClick={onWithdrawAmount}
+            disabled={actionPending}
+            className="inline-flex items-center justify-center rounded-lg border border-ritual-green/25 bg-white/45 px-4 py-3 font-medium text-ritual-green transition hover:bg-white/70 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            Withdraw
+          </button>
+        </div>
+      </div>
       {chatStatus !== "ready" ? (
         <div className="mt-4 rounded-lg border border-ritual-green/15 bg-white/35 p-3 text-sm leading-6 text-black/68">
-          {chatStatus === "missing-relayer"
-            ? "Server relayer is not configured yet."
-            : "ChatManager is not configured yet."}
+          ChatManager is not configured yet.
         </div>
       ) : null}
     </section>

@@ -6,7 +6,7 @@ The current scope is intentionally narrow:
 
 ```text
 connected wallet
--> server relayer
+-> MetaMask or optional browser-generated session wallet
 -> RitualChatManager
 -> Ritual LLM precompile 0x0802
 -> real Ritual Testnet transaction hash
@@ -18,18 +18,19 @@ The app does not include media chat, image generation, file upload, voice chat, 
 
 1. Connect an EVM wallet.
 2. Use the connected wallet address as the user's public identity.
-3. Send text prompts without wallet popups per message.
-4. The backend relayer submits `RitualChatManager.sendChatMessage(prompt)`.
-5. See a real Ritual Testnet transaction hash for each chat submission.
+3. Optionally generate and fund a browser session wallet for no-popup chat sends.
+4. Deposit RITUAL into RitualWallet for the active sender.
+5. Send text prompts through `RitualChatManager.sendChatMessage(prompt)`.
+6. See a real Ritual Testnet transaction hash for each chat submission.
 
-Wallet is used for identity only. Chat transactions are submitted by the server relayer to RitualChatManager.
+Wallet is used for identity. Chat transactions are submitted by MetaMask or the optional browser session wallet to RitualChatManager. The backend validates prompts and builds the approved ChatManager calldata; it does not hold a relayer key.
 
 ## Security Model
 
 - The browser never sends arbitrary target addresses or calldata for chat.
 - The chat API builds only `RitualChatManager.sendChatMessage(prompt)` server-side.
-- The backend relayer sends only to the configured `CHAT_MANAGER_ADDRESS`.
-- `RELAYER_PRIVATE_KEY` and `DEPLOYER_PRIVATE_KEY` are server-only.
+- The frontend can only submit the server-built call to the configured `CHAT_MANAGER_ADDRESS`.
+- `DEPLOYER_PRIVATE_KEY` is server-only.
 - Never create `NEXT_PUBLIC_RELAYER_PRIVATE_KEY` or `NEXT_PUBLIC_DEPLOYER_PRIVATE_KEY`.
 - Real mode never returns fake transaction hashes.
 
@@ -45,7 +46,6 @@ NEXT_PUBLIC_MOCK_MODE=false
 
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 TEE_SERVICE_REGISTRY_ADDRESS=0x9644e8562cE0Fe12b4deeC4163c064A8862Bf47F
-RELAYER_PRIVATE_KEY=
 DEPLOYER_PRIVATE_KEY=
 
 RITUAL_LLM_PRECOMPILE_ADDRESS=0x0802
@@ -57,6 +57,7 @@ RITUAL_LLM_CONVO_HISTORY_ENABLED=false
 RITUAL_LLM_CONVO_HISTORY_PROVIDER=
 RITUAL_LLM_CONVO_HISTORY_PATH=
 RITUAL_LLM_CONVO_HISTORY_KEY_REF=
+RITUAL_WALLET_ADDRESS=0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948
 RITUAL_LLM_WALLET_FUNDING_WEI=10000000000000000
 RITUAL_LLM_LOCK_DURATION=50000
 CHAT_MANAGER_ADDRESS=
@@ -65,7 +66,7 @@ STORAGE_DRIVER=memory
 MOCK_MODE=false
 ```
 
-`RELAYER_PRIVATE_KEY` is used as the server-held chat sender key. It must stay server-side and needs enough testnet gas to submit chat transactions.
+`RITUAL_LLM_LOCK_DURATION` must cover at least the request TTL. Deposit RITUAL into RitualWallet for whichever sender you use for chat: MetaMask or the generated session wallet.
 
 ## Find a Ritual LLM Executor
 
@@ -144,8 +145,8 @@ Chat is enabled only when:
 
 - wallet is connected
 - `CHAT_MANAGER_ADDRESS` is configured
-- `RELAYER_PRIVATE_KEY` is configured server-side
-- the relayer has enough Ritual testnet gas
+- the active sender has native Ritual testnet gas
+- the active sender has a RitualWallet deposit with enough lock duration
 - Ritual LLM config is working
 
 If any condition is missing, the existing status card shows the blocking state.
@@ -156,9 +157,19 @@ If any condition is missing, the existing status card shows the blocking state.
 
 Set `CHAT_MANAGER_ADDRESS` after deploying `RitualChatManager`.
 
-### Relayer not configured
+### RitualWallet deposit needed
 
-Set `RELAYER_PRIVATE_KEY` on the server only. Never expose it in frontend code.
+Use the in-app RitualWallet deposit controls for MetaMask or the generated session wallet.
+
+### Insufficient lock duration
+
+If chat fails with:
+
+```text
+invalid async payload: insufficient lock duration
+```
+
+the active chat sender has no active RitualWallet lock. Deposit into RitualWallet with a lock duration that covers the LLM TTL.
 
 ### Wallet nonce / replacement transaction errors
 
@@ -171,7 +182,7 @@ already known
 transaction underpriced
 ```
 
-usually mean the relayer has a pending or stuck transaction. Wait for the pending transaction to settle, then try again.
+usually mean the active chat sender has a pending or stuck transaction. Wait for the pending transaction to settle, then try again.
 
 ## Verification
 
