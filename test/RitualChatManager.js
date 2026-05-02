@@ -6,6 +6,7 @@ describe("RitualChatManager", () => {
   const MODEL = "zai-org/GLM-4.7-FP8";
   const TTL = 30n;
   const TEMPERATURE = 700n;
+  const MAX_COMPLETION_TOKENS = 512n;
   const CONVO_HISTORY = ["gcs", "ritual-chat/test-session.jsonl", "GCS_CREDS"];
 
   async function deployFixture() {
@@ -23,6 +24,7 @@ describe("RitualChatManager", () => {
       MODEL,
       TTL,
       TEMPERATURE,
+      MAX_COMPLETION_TOKENS,
       CONVO_HISTORY,
     );
     await manager.waitForDeployment();
@@ -69,6 +71,7 @@ describe("RitualChatManager", () => {
       MODEL,
       TTL,
       TEMPERATURE,
+      MAX_COMPLETION_TOKENS,
       ["", "", ""],
     );
     await manager.waitForDeployment();
@@ -88,6 +91,7 @@ describe("RitualChatManager", () => {
       MODEL,
       TTL,
       TEMPERATURE,
+      0n,
       ["hf", "", ""],
     )).to.be.revertedWithCustomError(Manager, "InvalidLlmConfig");
   });
@@ -135,6 +139,7 @@ describe("RitualChatManager", () => {
     expect(decoded[6]).to.equal(MODEL);
     expect(decoded[21]).to.equal(false);
     expect(decoded[22]).to.equal(TEMPERATURE);
+    expect(decoded[10]).to.equal(MAX_COMPLETION_TOKENS);
     expect(decoded[29].platform).to.equal(CONVO_HISTORY[0]);
     expect(decoded[29].path).to.equal(CONVO_HISTORY[1]);
     expect(decoded[29].keyRef).to.equal(CONVO_HISTORY[2]);

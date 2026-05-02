@@ -16,6 +16,7 @@ import {
   RITUAL_LLM_CONVO_HISTORY_KEY_REF,
   RITUAL_LLM_CONVO_HISTORY_PATH,
   RITUAL_LLM_CONVO_HISTORY_PROVIDER,
+  RITUAL_LLM_MAX_COMPLETION_TOKENS,
   RITUAL_LLM_TEMPERATURE,
   RITUAL_LLM_TTL,
 } from "@/lib/config";
@@ -127,7 +128,7 @@ export function buildLlmCallData(params: {
       0n,
       "",
       false,
-      4096n,
+      BigInt(RITUAL_LLM_MAX_COMPLETION_TOKENS),
       "",
       "",
       1n,

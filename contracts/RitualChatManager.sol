@@ -32,7 +32,7 @@ contract RitualChatManager is PrecompileConsumer {
     StorageRef private _convoHistory;
 
     uint256 public constant MAX_PROMPT_LENGTH = 1000;
-    int256 public constant MAX_COMPLETION_TOKENS = 4096;
+    int256 public immutable maxCompletionTokens;
 
     event ChatPromptSubmitted(address indexed smartAccount, address indexed caller, string prompt);
     event ChatResponseReceived(
@@ -48,10 +48,11 @@ contract RitualChatManager is PrecompileConsumer {
         string memory model_,
         uint256 ttl_,
         int256 temperature_,
+        int256 maxCompletionTokens_,
         StorageRef memory convoHistory_
     ) {
         if (llmPrecompile_ == address(0) || executor_ == address(0)) revert InvalidAddress();
-        if (ttl_ == 0 || bytes(model_).length == 0) {
+        if (ttl_ == 0 || bytes(model_).length == 0 || maxCompletionTokens_ <= 0) {
             revert InvalidLlmConfig();
         }
         bool hasAnyConvoHistory = bytes(convoHistory_.platform).length > 0
@@ -69,6 +70,7 @@ contract RitualChatManager is PrecompileConsumer {
         model = model_;
         ttl = ttl_;
         temperature = temperature_;
+        maxCompletionTokens = maxCompletionTokens_;
         _convoHistory = convoHistory_;
     }
 
@@ -125,7 +127,7 @@ contract RitualChatManager is PrecompileConsumer {
             int256(0),
             "",
             false,
-            MAX_COMPLETION_TOKENS,
+            maxCompletionTokens,
             "",
             "",
             uint256(1),

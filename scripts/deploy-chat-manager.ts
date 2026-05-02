@@ -9,6 +9,7 @@ const { ethers } = hardhat;
 const DEFAULT_LLM_MODEL = "zai-org/GLM-4.7-FP8";
 const DEFAULT_LLM_TTL = 300n;
 const DEFAULT_LLM_TEMPERATURE = 700n;
+const DEFAULT_LLM_MAX_COMPLETION_TOKENS = 512n;
 const DEFAULT_RITUAL_WALLET_ADDRESS = "0x532F0dF0896F353d8C3DD8cc134e8129DA2a3948";
 const DEFAULT_LLM_WALLET_LOCK_DURATION = 5000n;
 
@@ -34,8 +35,10 @@ async function main() {
   const provider = new ethers.JsonRpcProvider(rpcUrl, 1979);
   const deployer = new ethers.Wallet(readPrivateKey(), provider);
   const chainId = (await provider.getNetwork()).chainId;
-  const gasPrice = (await provider.getFeeData()).gasPrice;
-  if (!gasPrice) throw new Error("Ritual RPC did not return gas price.");
+  const feeData = await provider.getFeeData();
+  const maxFeePerGas = feeData.maxFeePerGas ?? feeData.gasPrice;
+  const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas ?? (maxFeePerGas ? maxFeePerGas / 10n : null);
+  if (!maxFeePerGas || !maxPriorityFeePerGas) throw new Error("Ritual RPC did not return EIP-1559 fee data.");
 
   const llmPrecompile = normalizePrecompileAddress(
     process.env.RITUAL_LLM_PRECOMPILE_ADDRESS,
@@ -47,6 +50,9 @@ async function main() {
   const requestedTtl = BigInt(process.env.RITUAL_LLM_TTL || DEFAULT_LLM_TTL.toString());
   const ttl = requestedTtl < DEFAULT_LLM_TTL ? DEFAULT_LLM_TTL : requestedTtl;
   const temperature = BigInt(process.env.RITUAL_LLM_TEMPERATURE || DEFAULT_LLM_TEMPERATURE.toString());
+  const maxCompletionTokens = BigInt(
+    process.env.RITUAL_LLM_MAX_COMPLETION_TOKENS || DEFAULT_LLM_MAX_COMPLETION_TOKENS.toString(),
+  );
   const convoHistoryEnabled = process.env.RITUAL_LLM_CONVO_HISTORY_ENABLED === "true";
   const convoHistoryProvider = convoHistoryEnabled ? process.env.RITUAL_LLM_CONVO_HISTORY_PROVIDER?.trim() : "";
   const convoHistoryPath = convoHistoryEnabled ? process.env.RITUAL_LLM_CONVO_HISTORY_PATH?.trim() : "";
@@ -59,6 +65,7 @@ async function main() {
   if (!ethers.isAddress(executor)) throw new Error("Invalid RITUAL_LLM_EXECUTOR_ADDRESS.");
   if (!ethers.isAddress(llmPrecompile)) throw new Error("Invalid RITUAL_LLM_PRECOMPILE_ADDRESS.");
   if (!model) throw new Error("Missing RITUAL_LLM_MODEL.");
+  if (maxCompletionTokens <= 0n) throw new Error("RITUAL_LLM_MAX_COMPLETION_TOKENS must be positive.");
   const hasAnyConvoHistory = Boolean(convoHistoryProvider || convoHistoryPath || convoHistoryKeyRef);
   const hasCompleteConvoHistory = Boolean(convoHistoryProvider && convoHistoryPath && convoHistoryKeyRef);
   if (hasAnyConvoHistory && !hasCompleteConvoHistory) {
@@ -74,6 +81,7 @@ async function main() {
   console.log(`LLM model: ${model}`);
   console.log(`LLM TTL: ${ttl.toString()} blocks`);
   console.log(`LLM temperature: ${temperature.toString()}`);
+  console.log(`LLM max completion tokens: ${maxCompletionTokens.toString()}`);
   console.log(
     hasCompleteConvoHistory
       ? `LLM convoHistory: ${convoHistoryProvider}:${convoHistoryPath} (${convoHistoryKeyRef})`
@@ -87,6 +95,7 @@ async function main() {
     model,
     ttl,
     temperature,
+    maxCompletionTokens,
     {
       platform: convoHistoryProvider ?? "",
       path: convoHistoryPath ?? "",
@@ -97,7 +106,8 @@ async function main() {
   const deploymentTx = await deployer.sendTransaction({
     ...deployTx,
     gasLimit: deployGas + deployGas / 5n,
-    gasPrice: gasPrice * 2n,
+    maxFeePerGas: maxFeePerGas * 2n,
+    maxPriorityFeePerGas,
   });
 
   console.log(`Deployment tx: ${deploymentTx.hash}`);
@@ -119,7 +129,8 @@ async function main() {
     const fundRitualWalletAccount = async (accountAddress: string, label: string) => {
       const fundingTx = await ritualWallet.depositFor(accountAddress, walletLockDuration, {
         value: walletFundingWei,
-        gasPrice: gasPrice * 2n,
+        maxFeePerGas: maxFeePerGas * 2n,
+        maxPriorityFeePerGas,
       });
       console.log(`RitualWallet ${label} funding tx: ${fundingTx.hash}`);
       const fundingReceipt = await fundingTx.wait();
@@ -158,7 +169,8 @@ async function main() {
       console.log("RitualChatManager was already approved as chat target.");
     } else {
       const approvalTx = await factory.setApprovedChatTarget(managerAddress, true, {
-        gasPrice: gasPrice * 2n,
+        maxFeePerGas: maxFeePerGas * 2n,
+        maxPriorityFeePerGas,
       });
       console.log(`Allowlist tx: ${approvalTx.hash}`);
       const approvalReceipt = await approvalTx.wait();

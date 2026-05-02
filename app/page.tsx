@@ -709,7 +709,7 @@ function base64ToBytes(value: string) {
 function formatChatTransactionError(err: unknown) {
   const message = collectErrorText(err).toLowerCase();
   if (message.includes("insufficient wallet balance") || message.includes("ritualwallet deposit")) {
-    return "The active chat sender needs a RitualWallet deposit before chatting. Deposit any amount, then try again.";
+    return "The active chat sender needs more RitualWallet balance for this LLM request. Deposit more RITUAL, then try again.";
   }
   if (message.includes("insufficient funds for gas") || message.includes("exceeds the balance of the account")) {
     return "The active chat sender needs more native RITUAL for gas before chatting.";
