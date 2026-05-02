@@ -95,7 +95,6 @@ export default function Home() {
       .then((storedSessionWallet) => {
         if (!storedSessionWallet) return;
         setSessionWalletKey(storedSessionWallet);
-        setActiveSender("session");
       })
       .catch(() => {
         setError("Stored session wallet could not be loaded in this browser.");
@@ -360,10 +359,12 @@ export default function Home() {
   }
 
   async function depositConnectedToRitualWallet() {
+    setActiveSender("wallet");
     await depositToRitualWallet("wallet", ritualWalletAmount);
   }
 
   async function depositSessionToRitualWallet() {
+    setActiveSender("session");
     await depositToRitualWallet("session", ritualWalletAmount);
   }
 
