@@ -67,7 +67,6 @@ export default function Home() {
   const [isSubmittingTx, setIsSubmittingTx] = useState(false);
   const [sessionWalletKey, setSessionWalletKey] = useState<Hex | null>(null);
   const [activeSender, setActiveSender] = useState<"wallet" | "session">("wallet");
-  const [senderSelectedByUser, setSenderSelectedByUser] = useState(false);
   const [ritualWalletAmount, setRitualWalletAmount] = useState("0.35");
   const [sessionWalletAmount, setSessionWalletAmount] = useState("0.01");
   const [walletActionPending, setWalletActionPending] = useState(false);
@@ -80,14 +79,7 @@ export default function Home() {
     sessionWalletKey ? privateKeyToAccount(sessionWalletKey).address : null
   ), [sessionWalletKey]);
   const realModePending = false;
-  const effectiveActiveSender = selectEffectiveActiveSender(
-    activeSender,
-    connectedBalances,
-    sessionBalances,
-    Boolean(sessionWalletAddress),
-    senderSelectedByUser,
-  );
-  const activeBalances = effectiveActiveSender === "session" ? sessionBalances : connectedBalances;
+  const activeBalances = activeSender === "session" ? sessionBalances : connectedBalances;
   const activeSenderHasLlmEscrow = Boolean(activeBalances && isSenderReadyForLlm(activeBalances));
   const chatReady = Boolean(
     agent
@@ -95,7 +87,7 @@ export default function Home() {
       && agent.chatStatus === "ready"
       && activeSenderHasLlmEscrow,
   );
-  const chatDisabledMessage = getChatDisabledMessage(agent, effectiveActiveSender, sessionWalletAddress, activeBalances);
+  const chatDisabledMessage = getChatDisabledMessage(agent, activeSender, sessionWalletAddress, activeBalances);
 
   useEffect(() => {
     setHasInjectedWallet(typeof window !== "undefined" && "ethereum" in window);
@@ -265,7 +257,7 @@ export default function Home() {
 
   async function submitPreparedTransaction(txRequest: { to: Address; data: Hex; value?: string }) {
     if (mockMode) return `0x${crypto.randomUUID().replace(/-/g, "").padEnd(64, "0")}` as Hash;
-    if (effectiveActiveSender === "session") {
+    if (activeSender === "session") {
       if (!sessionWalletKey) throw new Error("Generate a session wallet before using session chat.");
       const balances = await loadWalletBalances(privateKeyToAccount(sessionWalletKey).address);
       setSessionBalances(balances);
@@ -315,7 +307,6 @@ export default function Home() {
       .then(() => {
         setSessionWalletKey(privateKey);
         setActiveSender("session");
-        setSenderSelectedByUser(true);
         setNotice("Session wallet ready. It is encrypted and stored locally in this browser.");
       })
       .catch(() => {
@@ -369,13 +360,11 @@ export default function Home() {
 
   async function depositConnectedToRitualWallet() {
     setActiveSender("wallet");
-    setSenderSelectedByUser(true);
     await depositToRitualWallet("wallet", ritualWalletAmount);
   }
 
   async function depositSessionToRitualWallet() {
     setActiveSender("session");
-    setSenderSelectedByUser(true);
     await depositToRitualWallet("session", ritualWalletAmount);
   }
 
@@ -600,8 +589,8 @@ export default function Home() {
               <AgentStatusCard
                 session={agent}
                 sessionWalletAddress={sessionWalletAddress}
-                activeSender={effectiveActiveSender}
-                activeSenderLabel={effectiveActiveSender === "session" ? "Session Wallet" : "MetaMask"}
+                activeSender={activeSender}
+                activeSenderLabel={activeSender === "session" ? "Session Wallet" : "MetaMask"}
                 ritualWalletAmount={ritualWalletAmount}
                 sessionWalletAmount={sessionWalletAmount}
                 connectedNativeBalance={formatBalance(connectedBalances?.nativeWei)}
@@ -615,11 +604,9 @@ export default function Home() {
                 onGenerateSessionWallet={generateSessionWallet}
                 onUseConnectedWallet={() => {
                   setActiveSender("wallet");
-                  setSenderSelectedByUser(true);
                 }}
                 onUseSessionWallet={() => {
                   setActiveSender("session");
-                  setSenderSelectedByUser(true);
                 }}
                 onFundSessionWallet={fundSessionWallet}
                 onWithdrawSessionNative={withdrawSessionNativeToMetaMask}
@@ -662,23 +649,6 @@ function isSenderReadyForLlm(balances: WalletBalances) {
   return balances.nativeWei > 0n
     && balances.ritualWalletWei >= MIN_LLM_RITUAL_WALLET_ESCROW_WEI
     && balances.ritualWalletLockUntil > balances.currentBlock;
-}
-
-function selectEffectiveActiveSender(
-  requestedSender: "wallet" | "session",
-  connectedBalances: WalletBalances | null,
-  sessionBalances: WalletBalances | null,
-  hasSessionWallet: boolean,
-  senderSelectedByUser: boolean,
-) {
-  if (requestedSender === "session" && hasSessionWallet) {
-    if (senderSelectedByUser) return "session";
-    const sessionReady = sessionBalances ? isSenderReadyForLlm(sessionBalances) : false;
-    const walletReady = connectedBalances ? isSenderReadyForLlm(connectedBalances) : false;
-    if (sessionReady || !walletReady) return "session";
-  }
-
-  return "wallet";
 }
 
 function getChatDisabledMessage(
