@@ -6,7 +6,7 @@ describe("RitualChatManager", () => {
   const MODEL = "zai-org/GLM-4.7-FP8";
   const TTL = 30n;
   const TEMPERATURE = 700n;
-  const MAX_COMPLETION_TOKENS = 512n;
+  const MAX_COMPLETION_TOKENS = 64n;
   const CONVO_HISTORY = ["gcs", "ritual-chat/test-session.jsonl", "GCS_CREDS"];
 
   async function deployFixture() {

@@ -32,6 +32,7 @@ contract RitualChatManager is PrecompileConsumer {
     StorageRef private _convoHistory;
 
     uint256 public constant MAX_PROMPT_LENGTH = 1000;
+    int256 public constant DEFAULT_MAX_COMPLETION_TOKENS = 64;
     int256 public immutable maxCompletionTokens;
 
     event ChatPromptSubmitted(address indexed smartAccount, address indexed caller, string prompt);

@@ -709,7 +709,10 @@ function base64ToBytes(value: string) {
 function formatChatTransactionError(err: unknown) {
   const message = collectErrorText(err).toLowerCase();
   if (message.includes("insufficient wallet balance") || message.includes("ritualwallet deposit")) {
-    return "The active chat sender needs more RitualWallet balance for this LLM request. Deposit more RITUAL, then try again.";
+    const detail = extractRitualWalletBalanceDetail(message);
+    return detail
+      ? `The active chat sender needs more RitualWallet balance for this LLM request. ${detail}`
+      : "The active chat sender needs more RitualWallet balance for this LLM request. Deposit more RITUAL, then try again.";
   }
   if (message.includes("insufficient funds for gas") || message.includes("exceeds the balance of the account")) {
     return "The active chat sender needs more native RITUAL for gas before chatting.";
@@ -725,6 +728,14 @@ function formatChatTransactionError(err: unknown) {
 
   if (err instanceof Error) return err.message;
   return "Ritual LLM response failed. Please try again.";
+}
+
+function extractRitualWalletBalanceDetail(message: string) {
+  const match = message.match(/insufficient wallet balance:\s*(\d+)\s*<\s*required\s*(\d+)/i);
+  if (!match) return null;
+  const available = BigInt(match[1]);
+  const required = BigInt(match[2]);
+  return `Available ${formatBalance(available)}, required about ${formatBalance(required)}.`;
 }
 
 function collectErrorText(err: unknown) {
