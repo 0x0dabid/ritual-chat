@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   createPublicClient,
   createWalletClient,
+  encodeFunctionData,
   formatEther,
   http,
   parseAbi,
@@ -379,19 +380,14 @@ export default function Home() {
   async function withdrawFromRitualWallet(sender: "wallet" | "session", amountText: string) {
     const amount = parseRitualAmount(amountText);
     await runWalletAction("RitualWallet withdrawal failed.", async () => {
+      const data = encodeFunctionData({
+        abi: ritualWalletAbi,
+        functionName: "withdraw",
+        args: [amount],
+      });
       const txHash = sender === "session"
-        ? await getSessionWalletClient().writeContract({
-            address: RITUAL_WALLET_ADDRESS,
-            abi: ritualWalletAbi,
-            functionName: "withdraw",
-            args: [amount],
-          })
-        : await getConnectedWalletClient().writeContract({
-            address: RITUAL_WALLET_ADDRESS,
-            abi: ritualWalletAbi,
-            functionName: "withdraw",
-            args: [amount],
-          });
+        ? await sendSessionTransaction(RITUAL_WALLET_ADDRESS, data)
+        : await sendConnectedTransaction(RITUAL_WALLET_ADDRESS, data);
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("RitualWallet withdrawal failed on-chain.");
       await refreshWalletBalances();
@@ -402,21 +398,14 @@ export default function Home() {
   async function depositToRitualWallet(sender: "wallet" | "session", amountText: string) {
     const amount = parseRitualAmount(amountText);
     await runWalletAction("RitualWallet deposit failed.", async () => {
+      const data = encodeFunctionData({
+        abi: ritualWalletAbi,
+        functionName: "deposit",
+        args: [50_000n],
+      });
       const txHash = sender === "session"
-        ? await getSessionWalletClient().writeContract({
-            address: RITUAL_WALLET_ADDRESS,
-            abi: ritualWalletAbi,
-            functionName: "deposit",
-            args: [50_000n],
-            value: amount,
-          })
-        : await getConnectedWalletClient().writeContract({
-            address: RITUAL_WALLET_ADDRESS,
-            abi: ritualWalletAbi,
-            functionName: "deposit",
-            args: [50_000n],
-            value: amount,
-          });
+        ? await sendSessionTransaction(RITUAL_WALLET_ADDRESS, data, amount)
+        : await sendConnectedTransaction(RITUAL_WALLET_ADDRESS, data, amount);
       const status = await pollTx(txHash);
       if (status !== "confirmed") throw new Error("RitualWallet deposit failed on-chain.");
       await refreshWalletBalances();
@@ -451,6 +440,38 @@ export default function Home() {
       ritualPublicClient.getBlockNumber(),
     ]);
     return { nativeWei, ritualWalletWei, ritualWalletLockUntil, currentBlock };
+  }
+
+  async function sendConnectedTransaction(to: Address, data: Hex, value = 0n) {
+    const client = getConnectedWalletClient();
+    const txRequest = { to, data, value: value.toString() };
+    const gas = await estimateBufferedGas(client.account.address, txRequest);
+    const fees = await getEip1559Fees();
+    return client.sendTransaction({
+      to,
+      data,
+      value,
+      gas,
+      maxFeePerGas: fees.maxFeePerGas,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+    });
+  }
+
+  async function sendSessionTransaction(to: Address, data: Hex, value = 0n) {
+    if (!sessionWalletKey) throw new Error("Generate a session wallet first.");
+    const account = privateKeyToAccount(sessionWalletKey);
+    const client = getSessionWalletClient();
+    const txRequest = { to, data, value: value.toString() };
+    const gas = await estimateBufferedGas(account.address, txRequest);
+    const fees = await getEip1559Fees();
+    return client.sendTransaction({
+      to,
+      data,
+      value,
+      gas,
+      maxFeePerGas: fees.maxFeePerGas,
+      maxPriorityFeePerGas: fees.maxPriorityFeePerGas,
+    });
   }
 
   async function estimateBufferedGas(account: Address, txRequest: { to: Address; data: Hex; value?: string }) {
