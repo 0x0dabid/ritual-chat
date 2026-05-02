@@ -380,6 +380,14 @@ export default function Home() {
   async function withdrawFromRitualWallet(sender: "wallet" | "session", amountText: string) {
     const amount = parseRitualAmount(amountText);
     await runWalletAction("RitualWallet withdrawal failed.", async () => {
+      const owner = getRitualWalletOwner(sender);
+      const balances = await loadWalletBalances(owner);
+      if (balances.ritualWalletWei < amount) {
+        throw new Error(`RitualWallet balance is too low. Available ${formatBalance(balances.ritualWalletWei)}.`);
+      }
+      if (balances.ritualWalletLockUntil > balances.currentBlock) {
+        throw new Error(`RitualWallet funds are locked until block ${balances.ritualWalletLockUntil.toString()}. Withdraw after the lock expires.`);
+      }
       const data = encodeFunctionData({
         abi: ritualWalletAbi,
         functionName: "withdraw",
@@ -440,6 +448,15 @@ export default function Home() {
       ritualPublicClient.getBlockNumber(),
     ]);
     return { nativeWei, ritualWalletWei, ritualWalletLockUntil, currentBlock };
+  }
+
+  function getRitualWalletOwner(sender: "wallet" | "session") {
+    if (sender === "session") {
+      if (!sessionWalletKey) throw new Error("Generate a session wallet first.");
+      return privateKeyToAccount(sessionWalletKey).address;
+    }
+    if (!walletAddress) throw new Error("Connect MetaMask before using RitualWallet.");
+    return walletAddress;
   }
 
   async function sendConnectedTransaction(to: Address, data: Hex, value = 0n) {
